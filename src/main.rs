@@ -1,4 +1,4 @@
-use msgpass::{mpi_finalize, mpi_init};
+use msgpass::{mpi_finalize, mpi_init_thread, Communicator, MpiThread};
 use russell_lab::{StrError, Vector};
 use russell_sparse::prelude::*;
 
@@ -38,10 +38,19 @@ impl<'a> LinearSystem<'a> {
 }
 
 fn main() -> Result<(), StrError> {
-    mpi_init()?;
+    mpi_init_thread(MpiThread::Serialized)?;
 
-    println!("Hello, world!");
+    let mut comm = Communicator::new()?;
+    let rank = comm.rank()?;
+    // let size = comm.size()?;
+
+    let mut ls = LinearSystem::new(100 * (rank + 1))?;
+    ls.factorize()?;
 
     mpi_finalize()?;
+
+    if rank == 0 {
+        println!("... success ...");
+    }
     Ok(())
 }
