@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use crate::StrError;
-use russell_lab::{generate2d, Matrix};
+use russell_lab::{generate2d, Matrix, Vector};
 use russell_sparse::CooMatrix;
 use std::collections::{HashMap, HashSet};
 
@@ -20,6 +20,11 @@ pub enum Side {
 ///    L{u} = kx ———  +  ky ———
 ///              ∂x²        ∂y²
 /// ```
+///
+/// **Notes:**
+///
+/// * The operator is built with a five-point stencil.
+/// * The boundary nodes are 'mirrored' yielding a no-flux barrier.
 pub struct DiscreteLaplacian2d {
     kx: f64,            // diffusion parameter x
     ky: f64,            // diffusion parameter y
@@ -37,12 +42,6 @@ pub struct DiscreteLaplacian2d {
     /// Collects the essential boundary conditions
     /// Maps node => prescribed_value
     essential: HashMap<usize, f64>,
-
-    /// Coefficient matrix of A ⋅ x = b
-    aa: CooMatrix,
-
-    /// Indicates whether the coefficient matrix has been assembled or not
-    assembled: bool,
 }
 
 impl DiscreteLaplacian2d {
@@ -92,16 +91,11 @@ impl DiscreteLaplacian2d {
             bottom: (0..nx).collect(),
             top: ((dim - nx)..dim).collect(),
             essential: HashMap::new(),
-            aa: CooMatrix::new(dim, dim, max_nnz, None, false)?,
-            assembled: false,
         })
     }
 
     /// Sets essential (Dirichlet) boundary condition
-    pub fn set_essential_boundary_condition(&mut self, side: Side, value: f64) -> Result<(), StrError> {
-        if self.assembled {
-            return Err("cannot set essential boundary conditions with already assembled matrix");
-        }
+    pub fn set_essential_boundary_condition(&mut self, side: Side, value: f64) {
         match side {
             Side::Left => self.left.iter().for_each(|n| {
                 self.essential.insert(*n, value);
@@ -116,15 +110,17 @@ impl DiscreteLaplacian2d {
                 self.essential.insert(*n, value);
             }),
         };
-        Ok(())
     }
 
     /// Computes coefficient matrix 'A' of A ⋅ x = b
     ///
     /// **Note:** This function must be called after [DiscreteLaplacian2d::set_essential_boundary_condition]
-    pub fn compute_coefficient_matrix(&mut self) {
-        // reset A matrix
-        self.aa.reset();
+    pub fn coefficient_matrix(&mut self) -> Result<CooMatrix, StrError> {
+        // allocate 'A' matrix
+        let dim = self.nx * self.ny;
+        let max_bandwidth = 5;
+        let max_nnz = dim * max_bandwidth + dim; // the last +dim corresponds to the 1s put on the diagonal
+        let mut aa = CooMatrix::new(dim, dim, max_nnz, None, false)?;
 
         // auxiliary
         let dx2 = self.dx * self.dx;
@@ -136,7 +132,6 @@ impl DiscreteLaplacian2d {
         let mut jays = [0, 0, 0, 0, 0];
 
         // loop over all nx * ny equations
-        let dim = self.nx * self.ny;
         for i in 0..dim {
             if !self.essential.contains_key(&i) {
                 let col = i % self.nx; // grid column number
@@ -152,7 +147,7 @@ impl DiscreteLaplacian2d {
                 // set 'A' matrix value
                 for (k, j) in jays.iter().enumerate() {
                     if !self.essential.contains_key(j) {
-                        self.aa.put(i, *j, molecule[k]).unwrap();
+                        aa.put(i, *j, molecule[k]).unwrap();
                     }
                 }
             }
@@ -160,8 +155,9 @@ impl DiscreteLaplacian2d {
 
         // put ones on the diagonal corresponding to essential boundary conditions
         for i in self.essential.keys() {
-            self.aa.put(*i, *i, 1.0);
+            aa.put(*i, *i, 1.0);
         }
+        Ok((aa))
     }
 }
 
@@ -247,7 +243,7 @@ mod tests {
     #[test]
     fn coefficient_matrix_works() {
         let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 2.0, 0.0, 2.0, 3, 3).unwrap();
-        lap.compute_coefficient_matrix();
+        let aa = lap.coefficient_matrix().unwrap();
         let ___ = 0.0;
         #[rustfmt::skip]
         let aa_correct = Matrix::from(&[
@@ -261,7 +257,7 @@ mod tests {
             [ ___,  ___,  ___,  ___,  2.0,  ___,  1.0, -4.0,  1.0],
             [ ___,  ___,  ___,  ___,  ___,  2.0,  ___,  2.0, -4.0],
         ]);
-        mat_approx_eq(&lap.aa.as_dense(), &aa_correct, 1e-15);
+        mat_approx_eq(&aa.as_dense(), &aa_correct, 1e-15);
     }
 
     #[test]
@@ -271,7 +267,7 @@ mod tests {
         lap.set_essential_boundary_condition(Side::Right, 0.0);
         lap.set_essential_boundary_condition(Side::Bottom, 0.0);
         lap.set_essential_boundary_condition(Side::Top, 0.0);
-        lap.compute_coefficient_matrix();
+        let aa = lap.coefficient_matrix().unwrap();
         let ___ = 0.0;
         #[rustfmt::skip]
         let aa_correct = Matrix::from(&[
@@ -293,6 +289,6 @@ mod tests {
              [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0], // 15 prescribed
          ]); //  0   1    2    3    4    5    6    7    8    9   10   11   12   13   14   15
              //  p   p    p    p    p              p    p              p    p    p    p    p
-        mat_approx_eq(&lap.aa.as_dense(), &aa_correct, 1e-15);
+        mat_approx_eq(&aa.as_dense(), &aa_correct, 1e-15);
     }
 }
