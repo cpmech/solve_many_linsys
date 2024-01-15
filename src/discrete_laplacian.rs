@@ -37,6 +37,12 @@ pub struct DiscreteLaplacian2d {
     /// Collects the essential boundary conditions
     /// Maps node => prescribed_value
     essential: HashMap<usize, f64>,
+
+    /// Coefficient matrix of A ⋅ x = b
+    aa: CooMatrix,
+
+    /// Indicates whether the coefficient matrix has been assembled or not
+    assembled: bool,
 }
 
 impl DiscreteLaplacian2d {
@@ -70,6 +76,8 @@ impl DiscreteLaplacian2d {
         let dx = xx.get(0, 1) - xx.get(0, 0);
         let dy = yy.get(1, 0) - yy.get(0, 0);
         let dim = nx * ny;
+        let max_bandwidth = 5;
+        let max_nnz = dim * max_bandwidth + dim; // the last +dim corresponds to the 1s put on the diagonal
         Ok(DiscreteLaplacian2d {
             kx,
             ky,
@@ -84,45 +92,16 @@ impl DiscreteLaplacian2d {
             bottom: (0..nx).collect(),
             top: ((dim - nx)..dim).collect(),
             essential: HashMap::new(),
+            aa: CooMatrix::new(dim, dim, max_nnz, None, false)?,
+            assembled: false,
         })
     }
 
-    /// Assembles operator into A matrix of [A] ⋅ {x} = {b}
-    pub fn assemble(&self, aa: &mut CooMatrix) {
-        // reset A matrix
-        aa.reset();
-
-        // auxiliary
-        let dx2 = self.dx * self.dx;
-        let dy2 = self.dy * self.dy;
-        let alpha = -2.0 * (self.kx / dx2 + self.ky / dy2);
-        let beta = self.kx / dx2;
-        let gamma = self.ky / dy2;
-        let molecule = [alpha, beta, beta, gamma, gamma];
-        let mut jays = [0, 0, 0, 0, 0];
-
-        // loop over all nx * ny equations
-        let dim = self.nx * self.ny;
-        for i in 0..dim {
-            let col = i % self.nx; // grid column number
-            let row = i / self.nx; // grid row number
-
-            // j-index of grid nodes (mirror if needed)
-            jays[0] = i; // current node
-            jays[1] = if col == 0 { i + 1 } else { i - 1 }; // left node
-            jays[2] = if col == self.nx - 1 { i - 1 } else { i + 1 }; // right node
-            jays[3] = if row == 0 { i + self.nx } else { i - self.nx }; // bottom node
-            jays[4] = if row == self.ny - 1 { i - self.nx } else { i + self.nx }; // top node
-
-            // assemble
-            for (k, &j) in jays.iter().enumerate() {
-                aa.put(i, j, molecule[k]).unwrap();
-            }
-        }
-    }
-
     /// Sets essential (Dirichlet) boundary condition
-    pub fn set_essential_boundary_condition(&mut self, side: Side, value: f64) {
+    pub fn set_essential_boundary_condition(&mut self, side: Side, value: f64) -> Result<(), StrError> {
+        if self.assembled {
+            return Err("cannot set essential boundary conditions with already assembled matrix");
+        }
         match side {
             Side::Left => self.left.iter().for_each(|n| {
                 self.essential.insert(*n, value);
@@ -137,6 +116,52 @@ impl DiscreteLaplacian2d {
                 self.essential.insert(*n, value);
             }),
         };
+        Ok(())
+    }
+
+    /// Computes coefficient matrix 'A' of A ⋅ x = b
+    ///
+    /// **Note:** This function must be called after [DiscreteLaplacian2d::set_essential_boundary_condition]
+    pub fn compute_coefficient_matrix(&mut self) {
+        // reset A matrix
+        self.aa.reset();
+
+        // auxiliary
+        let dx2 = self.dx * self.dx;
+        let dy2 = self.dy * self.dy;
+        let alpha = -2.0 * (self.kx / dx2 + self.ky / dy2);
+        let beta = self.kx / dx2;
+        let gamma = self.ky / dy2;
+        let molecule = [alpha, beta, beta, gamma, gamma];
+        let mut jays = [0, 0, 0, 0, 0];
+
+        // loop over all nx * ny equations
+        let dim = self.nx * self.ny;
+        for i in 0..dim {
+            if !self.essential.contains_key(&i) {
+                let col = i % self.nx; // grid column number
+                let row = i / self.nx; // grid row number
+
+                // j-index of grid nodes (mirror if needed)
+                jays[0] = i; // current node
+                jays[1] = if col == 0 { i + 1 } else { i - 1 }; // left node
+                jays[2] = if col == self.nx - 1 { i - 1 } else { i + 1 }; // right node
+                jays[3] = if row == 0 { i + self.nx } else { i - self.nx }; // bottom node
+                jays[4] = if row == self.ny - 1 { i - self.nx } else { i + self.nx }; // top node
+
+                // set 'A' matrix value
+                for (k, j) in jays.iter().enumerate() {
+                    if !self.essential.contains_key(j) {
+                        self.aa.put(i, *j, molecule[k]).unwrap();
+                    }
+                }
+            }
+        }
+
+        // put ones on the diagonal corresponding to essential boundary conditions
+        for i in self.essential.keys() {
+            self.aa.put(*i, *i, 1.0);
+        }
     }
 }
 
@@ -184,28 +209,6 @@ mod tests {
     }
 
     #[test]
-    fn assemble_works() {
-        let lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 2.0, 0.0, 2.0, 3, 3).unwrap();
-        let dim = lap.nx * lap.ny;
-        let max_bandwidth = 5;
-        let max_nnz = dim * max_bandwidth;
-        let mut aa = CooMatrix::new(dim, dim, max_nnz, None, false).unwrap();
-        lap.assemble(&mut aa);
-        let aa_correct = Matrix::from(&[
-            [-4.0, 2.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            [1.0, -4.0, 1.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 2.0, -4.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0, -4.0, 2.0, 0.0, 1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 1.0, -4.0, 1.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0, 2.0, -4.0, 0.0, 0.0, 1.0],
-            [0.0, 0.0, 0.0, 2.0, 0.0, 0.0, -4.0, 2.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 1.0, -4.0, 1.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 2.0, -4.0],
-        ]);
-        mat_approx_eq(&aa.as_dense(), &aa_correct, 1e-15);
-    }
-
-    #[test]
     fn set_essential_boundary_condition_works() {
         let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 3.0, 0.0, 3.0, 4, 4).unwrap();
         const LEF: f64 = 1.0;
@@ -239,5 +242,57 @@ mod tests {
                 (15, TOP), // top* and right
             ]
         );
+    }
+
+    #[test]
+    fn coefficient_matrix_works() {
+        let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 2.0, 0.0, 2.0, 3, 3).unwrap();
+        lap.compute_coefficient_matrix();
+        let ___ = 0.0;
+        #[rustfmt::skip]
+        let aa_correct = Matrix::from(&[
+            [-4.0,  2.0,  ___,  2.0,  ___,  ___,  ___,  ___,  ___],
+            [ 1.0, -4.0,  1.0,  ___,  2.0,  ___,  ___,  ___,  ___],
+            [ ___,  2.0, -4.0,  ___,  ___,  2.0,  ___,  ___,  ___],
+            [ 1.0,  ___,  ___, -4.0,  2.0,  ___,  1.0,  ___,  ___],
+            [ ___,  1.0,  ___,  1.0, -4.0,  1.0,  ___,  1.0,  ___],
+            [ ___,  ___,  1.0,  ___,  2.0, -4.0,  ___,  ___,  1.0],
+            [ ___,  ___,  ___,  2.0,  ___,  ___, -4.0,  2.0,  ___],
+            [ ___,  ___,  ___,  ___,  2.0,  ___,  1.0, -4.0,  1.0],
+            [ ___,  ___,  ___,  ___,  ___,  2.0,  ___,  2.0, -4.0],
+        ]);
+        mat_approx_eq(&lap.aa.as_dense(), &aa_correct, 1e-15);
+    }
+
+    #[test]
+    fn coefficient_matrix_with_essential_prescribed_works() {
+        let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 3.0, 0.0, 3.0, 4, 4).unwrap();
+        lap.set_essential_boundary_condition(Side::Left, 0.0);
+        lap.set_essential_boundary_condition(Side::Right, 0.0);
+        lap.set_essential_boundary_condition(Side::Bottom, 0.0);
+        lap.set_essential_boundary_condition(Side::Top, 0.0);
+        lap.compute_coefficient_matrix();
+        let ___ = 0.0;
+        #[rustfmt::skip]
+        let aa_correct = Matrix::from(&[
+             [1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  0 prescribed
+             [___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  1 prescribed
+             [___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  2 prescribed
+             [___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  3 prescribed
+             [___, ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  4 prescribed
+             [___, ___, ___, ___, ___,-4.0, 1.0, ___, ___, 1.0, ___, ___, ___, ___, ___, ___], //  5
+             [___, ___, ___, ___, ___, 1.0,-4.0, ___, ___, ___, 1.0, ___, ___, ___, ___, ___], //  6
+             [___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___], //  7 prescribed
+             [___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___], //  8 prescribed
+             [___, ___, ___, ___, ___, 1.0, ___, ___, ___,-4.0, 1.0, ___, ___, ___, ___, ___], //  9
+             [___, ___, ___, ___, ___, ___, 1.0, ___, ___, 1.0,-4.0, ___, ___, ___, ___, ___], // 10
+             [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___, ___], // 11 prescribed
+             [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___], // 12 prescribed
+             [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___], // 13 prescribed
+             [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___], // 14 prescribed
+             [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0], // 15 prescribed
+         ]); //  0   1    2    3    4    5    6    7    8    9   10   11   12   13   14   15
+             //  p   p    p    p    p              p    p              p    p    p    p    p
+        mat_approx_eq(&lap.aa.as_dense(), &aa_correct, 1e-15);
     }
 }
