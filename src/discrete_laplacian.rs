@@ -12,14 +12,18 @@ use russell_sparse::CooMatrix;
 ///              ∂x²        ∂y²
 /// ```
 pub struct DiscreteLaplacian2d {
-    kx: f64,    // diffusion parameter x
-    ky: f64,    // diffusion parameter y
-    xx: Matrix, // (ny * nx) matrix of coordinates
-    yy: Matrix, // (ny * nx) matrix of coordinates
-    nx: usize,  // number of points along x (≥ 2)
-    ny: usize,  // number of points along y (≥ 2)
-    dx: f64,    // grid spacing along x
-    dy: f64,    // grid spacing along y
+    kx: f64,            // diffusion parameter x
+    ky: f64,            // diffusion parameter y
+    xx: Matrix,         // (ny * nx) matrix of coordinates
+    yy: Matrix,         // (ny * nx) matrix of coordinates
+    nx: usize,          // number of points along x (≥ 2)
+    ny: usize,          // number of points along y (≥ 2)
+    dx: f64,            // grid spacing along x
+    dy: f64,            // grid spacing along y
+    left: Vec<usize>,   // indices of nodes on the left edge
+    right: Vec<usize>,  // indices of nodes on the right edge
+    bottom: Vec<usize>, // indices of nodes on the bottom edge
+    top: Vec<usize>,    // indices of nodes on the top edge
 }
 
 impl DiscreteLaplacian2d {
@@ -52,6 +56,7 @@ impl DiscreteLaplacian2d {
         let (xx, yy) = generate2d(xmin, xmax, ymin, ymax, nx, ny);
         let dx = xx.get(0, 1) - xx.get(0, 0);
         let dy = yy.get(1, 0) - yy.get(0, 0);
+        let n = nx * ny;
         Ok(DiscreteLaplacian2d {
             kx,
             ky,
@@ -61,6 +66,10 @@ impl DiscreteLaplacian2d {
             ny,
             dx,
             dy,
+            left: (0..n).step_by(nx).collect(),
+            right: ((nx - 1)..n).step_by(nx).collect(),
+            bottom: (0..nx).collect(),
+            top: ((n - nx)..n).collect(),
         })
     }
 
@@ -108,7 +117,21 @@ mod tests {
 
     #[test]
     fn new_works() {
-        let lap = DiscreteLaplacian2d::new(1.0, 1.0, -1.0, 1.0, -3.0, 3.0, 2, 3).unwrap();
+        let nx = 2;
+        let ny = 3;
+        let lap = DiscreteLaplacian2d::new(7.0, 8.0, -1.0, 1.0, -3.0, 3.0, nx, ny).unwrap();
+        assert_eq!(lap.kx, 7.0);
+        assert_eq!(lap.ky, 8.0);
+        assert_eq!(lap.xx.dims(), (ny, nx));
+        assert_eq!(lap.yy.dims(), (ny, nx));
+        assert_eq!(lap.nx, nx);
+        assert_eq!(lap.ny, ny);
+        assert_eq!(lap.dx, 2.0);
+        assert_eq!(lap.dy, 3.0);
+        assert_eq!(lap.left, &[0, 2, 4]);
+        assert_eq!(lap.right, &[1, 3, 5]);
+        assert_eq!(lap.bottom, &[0, 1]);
+        assert_eq!(lap.top, &[4, 5]);
         assert_eq!(
             format!("{}", lap.xx),
             "┌       ┐\n\
@@ -125,15 +148,15 @@ mod tests {
              │  3  3 │\n\
              └       ┘"
         );
-        assert_eq!(lap.dx, 2.0);
-        assert_eq!(lap.dy, 3.0);
     }
 
     #[test]
     fn assemble_works() {
         let lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 2.0, 0.0, 2.0, 3, 3).unwrap();
         let n = lap.nx * lap.ny;
-        let mut aa = CooMatrix::new(n, n, n * n, None, false).unwrap();
+        let max_bandwidth = 5;
+        let max_nnz = n * max_bandwidth;
+        let mut aa = CooMatrix::new(n, n, max_nnz, None, false).unwrap();
         lap.assemble(&mut aa);
         let aa_correct = Matrix::from(&[
             [-4.0, 2.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0],
