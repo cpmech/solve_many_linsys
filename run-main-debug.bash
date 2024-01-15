@@ -12,4 +12,4 @@ fi
 
 cargo build --target-dir $OUT_DIR
 
-mpiexec -np 4 $OUT_DIR/debug/solve_many_linsys
+mpiexec -np 4 $OUT_DIR/debug/simple_laplacian
