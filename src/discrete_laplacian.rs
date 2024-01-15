@@ -43,6 +43,12 @@ impl DiscreteLaplacian2d {
         nx: usize,
         ny: usize,
     ) -> Result<Self, StrError> {
+        if nx < 2 {
+            return Err("nx must be ≥ 2");
+        }
+        if ny < 2 {
+            return Err("ny must be ≥ 2");
+        }
         let (xx, yy) = generate2d(xmin, xmax, ymin, ymax, nx, ny);
         let dx = xx.get(0, 1) - xx.get(0, 0);
         let dy = yy.get(1, 0) - yy.get(0, 0);
@@ -70,31 +76,19 @@ impl DiscreteLaplacian2d {
         let beta = self.kx / dx2;
         let gamma = self.ky / dy2;
         let molecule = [alpha, beta, beta, gamma, gamma];
-        let mut jays = vec![0; 5];
+        let mut jays = [0, 0, 0, 0, 0];
 
         // loop over all nx * ny equations
         for i in 0..(self.nx * self.ny) {
             let col = i % self.nx; // grid column number
             let row = i / self.nx; // grid row number
-            jays[0] = i; // current node
-            jays[1] = i - 1; // left node
-            jays[2] = i + 1; // right node
-            jays[3] = i - self.nx; // bottom node
-            jays[4] = i + self.nx; // top node
 
-            // 'mirror' boundaries
-            if col == 0 {
-                jays[1] = jays[2];
-            }
-            if col == self.nx - 1 {
-                jays[2] = jays[1];
-            }
-            if row == 0 {
-                jays[3] = jays[4];
-            }
-            if row == self.ny - 1 {
-                jays[4] = jays[3];
-            }
+            // j-index of grid nodes (mirror if needed)
+            jays[0] = i; // current node
+            jays[1] = if col == 0 { i + 1 } else { i - 1 }; // left node
+            jays[2] = if col == self.nx - 1 { i - 1 } else { i + 1 }; // right node
+            jays[3] = if row == 0 { i + self.nx } else { i - self.nx }; // bottom node
+            jays[4] = if row == self.ny - 1 { i - self.nx } else { i + self.nx }; // top node
 
             // assemble
             for (k, &j) in jays.iter().enumerate() {
@@ -109,6 +103,8 @@ impl DiscreteLaplacian2d {
 #[cfg(test)]
 mod tests {
     use super::DiscreteLaplacian2d;
+    use russell_lab::{mat_approx_eq, Matrix};
+    use russell_sparse::CooMatrix;
 
     #[test]
     fn new_works() {
@@ -131,5 +127,25 @@ mod tests {
         );
         assert_eq!(lap.dx, 2.0);
         assert_eq!(lap.dy, 3.0);
+    }
+
+    #[test]
+    fn assemble_works() {
+        let lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 2.0, 0.0, 2.0, 3, 3).unwrap();
+        let n = lap.nx * lap.ny;
+        let mut aa = CooMatrix::new(n, n, n * n, None, false).unwrap();
+        lap.assemble(&mut aa);
+        let aa_correct = Matrix::from(&[
+            [-4.0, 2.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [1.0, -4.0, 1.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 2.0, -4.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, -4.0, 2.0, 0.0, 1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 1.0, -4.0, 1.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0, 2.0, -4.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.0, 2.0, 0.0, 0.0, -4.0, 2.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 1.0, -4.0, 1.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 2.0, -4.0],
+        ]);
+        mat_approx_eq(&aa.as_dense(), &aa_correct, 1e-15);
     }
 }
