@@ -3,6 +3,15 @@
 use crate::StrError;
 use russell_lab::{generate2d, Matrix};
 use russell_sparse::CooMatrix;
+use std::collections::{HashMap, HashSet};
+
+/// Specifies the (boundary) side of a rectangle
+pub enum Side {
+    Left,
+    Right,
+    Bottom,
+    Top,
+}
 
 /// Implements the Finite Difference (FDM) Laplacian operator in 2D
 ///
@@ -24,6 +33,10 @@ pub struct DiscreteLaplacian2d {
     right: Vec<usize>,  // indices of nodes on the right edge
     bottom: Vec<usize>, // indices of nodes on the bottom edge
     top: Vec<usize>,    // indices of nodes on the top edge
+
+    /// Collects the essential boundary conditions
+    /// Maps node => prescribed_value
+    essential: HashMap<usize, f64>,
 }
 
 impl DiscreteLaplacian2d {
@@ -56,7 +69,7 @@ impl DiscreteLaplacian2d {
         let (xx, yy) = generate2d(xmin, xmax, ymin, ymax, nx, ny);
         let dx = xx.get(0, 1) - xx.get(0, 0);
         let dy = yy.get(1, 0) - yy.get(0, 0);
-        let n = nx * ny;
+        let dim = nx * ny;
         Ok(DiscreteLaplacian2d {
             kx,
             ky,
@@ -66,10 +79,11 @@ impl DiscreteLaplacian2d {
             ny,
             dx,
             dy,
-            left: (0..n).step_by(nx).collect(),
-            right: ((nx - 1)..n).step_by(nx).collect(),
+            left: (0..dim).step_by(nx).collect(),
+            right: ((nx - 1)..dim).step_by(nx).collect(),
             bottom: (0..nx).collect(),
-            top: ((n - nx)..n).collect(),
+            top: ((dim - nx)..dim).collect(),
+            essential: HashMap::new(),
         })
     }
 
@@ -88,7 +102,8 @@ impl DiscreteLaplacian2d {
         let mut jays = [0, 0, 0, 0, 0];
 
         // loop over all nx * ny equations
-        for i in 0..(self.nx * self.ny) {
+        let dim = self.nx * self.ny;
+        for i in 0..dim {
             let col = i % self.nx; // grid column number
             let row = i / self.nx; // grid row number
 
@@ -105,13 +120,31 @@ impl DiscreteLaplacian2d {
             }
         }
     }
+
+    /// Sets essential (Dirichlet) boundary condition
+    pub fn set_essential_boundary_condition(&mut self, side: Side, value: f64) {
+        match side {
+            Side::Left => self.left.iter().for_each(|n| {
+                self.essential.insert(*n, value);
+            }),
+            Side::Right => self.right.iter().for_each(|n| {
+                self.essential.insert(*n, value);
+            }),
+            Side::Bottom => self.bottom.iter().for_each(|n| {
+                self.essential.insert(*n, value);
+            }),
+            Side::Top => self.top.iter().for_each(|n| {
+                self.essential.insert(*n, value);
+            }),
+        };
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
 mod tests {
-    use super::DiscreteLaplacian2d;
+    use super::{DiscreteLaplacian2d, Side};
     use russell_lab::{mat_approx_eq, Matrix};
     use russell_sparse::CooMatrix;
 
@@ -153,10 +186,10 @@ mod tests {
     #[test]
     fn assemble_works() {
         let lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 2.0, 0.0, 2.0, 3, 3).unwrap();
-        let n = lap.nx * lap.ny;
+        let dim = lap.nx * lap.ny;
         let max_bandwidth = 5;
-        let max_nnz = n * max_bandwidth;
-        let mut aa = CooMatrix::new(n, n, max_nnz, None, false).unwrap();
+        let max_nnz = dim * max_bandwidth;
+        let mut aa = CooMatrix::new(dim, dim, max_nnz, None, false).unwrap();
         lap.assemble(&mut aa);
         let aa_correct = Matrix::from(&[
             [-4.0, 2.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -170,5 +203,41 @@ mod tests {
             [0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 2.0, -4.0],
         ]);
         mat_approx_eq(&aa.as_dense(), &aa_correct, 1e-15);
+    }
+
+    #[test]
+    fn set_essential_boundary_condition_works() {
+        let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 3.0, 0.0, 3.0, 4, 4).unwrap();
+        const LEF: f64 = 1.0;
+        const RIG: f64 = 2.0;
+        const BOT: f64 = 3.0;
+        const TOP: f64 = 4.0;
+        lap.set_essential_boundary_condition(Side::Left, LEF); //    0*   4   8  12*
+        lap.set_essential_boundary_condition(Side::Right, RIG); //   3*   7  11  15
+        lap.set_essential_boundary_condition(Side::Bottom, BOT); //  0*   1   2   3
+        lap.set_essential_boundary_condition(Side::Top, TOP); //    12*  13  14  15*  (corner*)
+        assert_eq!(lap.left, &[0, 4, 8, 12]);
+        assert_eq!(lap.right, &[3, 7, 11, 15]);
+        assert_eq!(lap.bottom, &[0, 1, 2, 3]);
+        assert_eq!(lap.top, &[12, 13, 14, 15]);
+        let mut essential: Vec<_> = lap.essential.iter().map(|(k, v)| (*k, *v)).collect();
+        essential.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        assert_eq!(
+            essential,
+            &[
+                (0, BOT),  // bottom* and left  (wins*)
+                (1, BOT),  // bottom
+                (2, BOT),  // bottom
+                (3, BOT),  // bottom* and right
+                (4, LEF),  // left
+                (7, RIG),  // right
+                (8, LEF),  // left
+                (11, RIG), // right
+                (12, TOP), // top* and left
+                (13, TOP), // top
+                (14, TOP), // top
+                (15, TOP), // top* and right
+            ]
+        );
     }
 }
