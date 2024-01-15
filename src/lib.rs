@@ -1,15 +1,5 @@
-pub fn say_hello() {
-    println!("hello world");
-}
+/// Defines a type alias for the error type as a static string
+pub type StrError = &'static str;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn run_test() {
-        say_hello();
-    }
-}
+mod discrete_laplacian;
+pub use crate::discrete_laplacian::*;
