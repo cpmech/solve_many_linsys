@@ -1,9 +1,7 @@
-#![allow(unused)]
-
 use crate::StrError;
-use russell_lab::{generate2d, Matrix, Vector};
+use russell_lab::{generate2d, Matrix};
 use russell_sparse::CooMatrix;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Specifies the (boundary) side of a rectangle
 pub enum Side {
@@ -28,8 +26,10 @@ pub enum Side {
 pub struct DiscreteLaplacian2d {
     kx: f64,            // diffusion parameter x
     ky: f64,            // diffusion parameter y
-    xx: Matrix,         // (ny * nx) matrix of coordinates
-    yy: Matrix,         // (ny * nx) matrix of coordinates
+    xmin: f64,          // min x coordinate
+    xmax: f64,          // max x coordinate
+    ymin: f64,          // min y coordinate
+    ymax: f64,          // max y coordinate
     nx: usize,          // number of points along x (≥ 2)
     ny: usize,          // number of points along y (≥ 2)
     dx: f64,            // grid spacing along x
@@ -51,8 +51,10 @@ impl DiscreteLaplacian2d {
     ///
     /// * `kx` -- diffusion parameter x
     /// * `ky` -- diffusion parameter y
-    /// * `xmin`, `xmax` -- range along x
-    /// * `ymin`, `ymax` -- range along y
+    /// * `xmin` -- min x coordinate
+    /// * `xmax` -- max x coordinate
+    /// * `ymin` -- min y coordinate
+    /// * `ymax` -- max y coordinate
     /// * `nx` -- number of points along x (≥ 2)
     /// * `ny` -- number of points along y (≥ 2)
     pub fn new(
@@ -71,21 +73,18 @@ impl DiscreteLaplacian2d {
         if ny < 2 {
             return Err("ny must be ≥ 2");
         }
-        let (xx, yy) = generate2d(xmin, xmax, ymin, ymax, nx, ny);
-        let dx = xx.get(0, 1) - xx.get(0, 0);
-        let dy = yy.get(1, 0) - yy.get(0, 0);
         let dim = nx * ny;
-        let max_bandwidth = 5;
-        let max_nnz = dim * max_bandwidth + dim; // the last +dim corresponds to the 1s put on the diagonal
         Ok(DiscreteLaplacian2d {
             kx,
             ky,
-            xx,
-            yy,
+            xmin,
+            xmax,
+            ymin,
+            ymax,
             nx,
             ny,
-            dx,
-            dy,
+            dx: (xmax - xmin) / ((nx - 1) as f64),
+            dy: (ymax - ymin) / ((ny - 1) as f64),
             left: (0..dim).step_by(nx).collect(),
             right: ((nx - 1)..dim).step_by(nx).collect(),
             bottom: (0..nx).collect(),
@@ -155,9 +154,21 @@ impl DiscreteLaplacian2d {
 
         // put ones on the diagonal corresponding to essential boundary conditions
         for i in self.essential.keys() {
-            aa.put(*i, *i, 1.0);
+            aa.put(*i, *i, 1.0)?;
         }
-        Ok((aa))
+        Ok(aa)
+    }
+
+    /// Returns a meshgrid of coordinates (e.g., for plotting)
+    ///
+    /// # Output
+    ///
+    /// Returns `(xx, yy)` where:
+    ///
+    /// `xx` -- (ny * nx) matrix of coordinates
+    /// `yy` -- (ny * nx) matrix of coordinates
+    pub fn get_grid_coordinates(&self) -> (Matrix, Matrix) {
+        generate2d(self.xmin, self.xmax, self.ymin, self.ymax, self.nx, self.ny)
     }
 }
 
@@ -167,41 +178,24 @@ impl DiscreteLaplacian2d {
 mod tests {
     use super::{DiscreteLaplacian2d, Side};
     use russell_lab::{mat_approx_eq, Matrix};
-    use russell_sparse::CooMatrix;
 
     #[test]
     fn new_works() {
-        let nx = 2;
-        let ny = 3;
-        let lap = DiscreteLaplacian2d::new(7.0, 8.0, -1.0, 1.0, -3.0, 3.0, nx, ny).unwrap();
+        let lap = DiscreteLaplacian2d::new(7.0, 8.0, -1.0, 1.0, -3.0, 3.0, 2, 3).unwrap();
         assert_eq!(lap.kx, 7.0);
         assert_eq!(lap.ky, 8.0);
-        assert_eq!(lap.xx.dims(), (ny, nx));
-        assert_eq!(lap.yy.dims(), (ny, nx));
-        assert_eq!(lap.nx, nx);
-        assert_eq!(lap.ny, ny);
+        assert_eq!(lap.xmin, -1.0);
+        assert_eq!(lap.xmax, 1.0);
+        assert_eq!(lap.ymin, -3.0);
+        assert_eq!(lap.ymax, 3.0);
+        assert_eq!(lap.nx, 2);
+        assert_eq!(lap.ny, 3);
         assert_eq!(lap.dx, 2.0);
         assert_eq!(lap.dy, 3.0);
         assert_eq!(lap.left, &[0, 2, 4]);
         assert_eq!(lap.right, &[1, 3, 5]);
         assert_eq!(lap.bottom, &[0, 1]);
         assert_eq!(lap.top, &[4, 5]);
-        assert_eq!(
-            format!("{}", lap.xx),
-            "┌       ┐\n\
-             │ -1  1 │\n\
-             │ -1  1 │\n\
-             │ -1  1 │\n\
-             └       ┘"
-        );
-        assert_eq!(
-            format!("{}", lap.yy),
-            "┌       ┐\n\
-             │ -3 -3 │\n\
-             │  0  0 │\n\
-             │  3  3 │\n\
-             └       ┘"
-        );
     }
 
     #[test]
@@ -290,5 +284,27 @@ mod tests {
          ]); //  0   1    2    3    4    5    6    7    8    9   10   11   12   13   14   15
              //  p   p    p    p    p              p    p              p    p    p    p    p
         mat_approx_eq(&aa.as_dense(), &aa_correct, 1e-15);
+    }
+
+    #[test]
+    fn get_grid_coordinates_works() {
+        let lap = DiscreteLaplacian2d::new(7.0, 8.0, -1.0, 1.0, -3.0, 3.0, 2, 3).unwrap();
+        let (xx, yy) = lap.get_grid_coordinates();
+        assert_eq!(
+            format!("{}", xx),
+            "┌       ┐\n\
+             │ -1  1 │\n\
+             │ -1  1 │\n\
+             │ -1  1 │\n\
+             └       ┘"
+        );
+        assert_eq!(
+            format!("{}", yy),
+            "┌       ┐\n\
+             │ -3 -3 │\n\
+             │  0  0 │\n\
+             │  3  3 │\n\
+             └       ┘"
+        );
     }
 }
