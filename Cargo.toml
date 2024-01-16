@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 msgpass = "0.2"
+plotpy = "0.5"
 rayon = "1.8"
 russell_lab = "0.7"
 russell_sparse = "0.7"
