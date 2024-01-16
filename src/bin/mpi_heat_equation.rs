@@ -55,9 +55,6 @@ fn main() -> Result<(), StrError> {
     // initialize the MPI engine
     mpi_init_thread(MpiThread::Serialized)?;
 
-    // start stopwatch
-    let mut stopwatch = Stopwatch::new("");
-
     // allocate MPI communicator and determine this processor's rank
     let mut comm = Communicator::new()?;
     let rank = comm.rank()?;
@@ -67,6 +64,9 @@ fn main() -> Result<(), StrError> {
     let opt = Options::from_args();
     let genie = Genie::from(&opt.genie);
     let one_based = if genie == Genie::Mumps { true } else { false };
+
+    // start stopwatch
+    let mut stopwatch = Stopwatch::new("");
 
     // create coefficient matrix
     let (fdm, mut mat) = create_discrete_laplacian(opt.nx, opt.nx, one_based);
@@ -93,6 +93,9 @@ fn main() -> Result<(), StrError> {
         let b = populate_rhs_vector(&fdm, *multiplier);
         solver.actual.solve(&mut x, &mat, &b, false)?;
 
+        // synchronize
+        comm.barrier()?;
+
         // message
         if rank == ROOT {
             print!("done with multiplier = {:>3}", multiplier);
@@ -117,11 +120,13 @@ fn main() -> Result<(), StrError> {
         }
     }
 
-    // finalize the MPI engine
-    mpi_finalize()?;
+    // message
     if rank == ROOT {
         stopwatch.stop();
         println!("elapsed time = {}", stopwatch);
     }
+
+    // finalize the MPI engine
+    mpi_finalize()?;
     Ok(())
 }

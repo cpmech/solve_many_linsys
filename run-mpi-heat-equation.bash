@@ -17,4 +17,7 @@ cargo build --release --target-dir $OUT_DIR
 
 BIN=$OUT_DIR/release/mpi_heat_equation
 
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+
 mpiexec --oversubscribe -np $N_PROC $BIN -- $GRID_NX $GENIE
