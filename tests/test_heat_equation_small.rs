@@ -42,9 +42,10 @@ fn main() -> Result<(), StrError> {
     // │  0    0  │ │ xp │   │   0    │
     // └          ┘ └    ┘   └        ┘
     // C := augmented(Aup)
-    let (dim, _, aa, cc) = fdm.coefficient_matrix().unwrap();
+    let (aa, cc) = fdm.coefficient_matrix().unwrap();
 
     // allocate the left- and right-hand side vectors
+    let dim = fdm.dim();
     let mut x = Vector::new(dim);
     let mut b = Vector::new(dim);
 

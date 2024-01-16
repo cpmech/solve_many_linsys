@@ -31,9 +31,10 @@ fn main() -> Result<(), StrError> {
     fdm.set_homogeneous_boundary_conditions();
 
     // compute the augmented coefficient matrix
-    let (dim, _, aa, _) = fdm.coefficient_matrix().unwrap();
+    let (aa, _) = fdm.coefficient_matrix().unwrap();
 
     // allocate the left- and right-hand side vectors
+    let dim = fdm.dim();
     let mut phi = Vector::new(dim);
     let mut rhs = Vector::new(dim);
 

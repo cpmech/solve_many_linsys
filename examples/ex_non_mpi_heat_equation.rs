@@ -29,9 +29,10 @@ fn main() -> Result<(), StrError> {
     fdm.set_essential_boundary_condition(Side::Top, 50.0);
 
     // compute the augmented coefficient matrix and the correction matrix
-    let (dim, _, aa, cc) = fdm.coefficient_matrix().unwrap();
+    let (aa, cc) = fdm.coefficient_matrix().unwrap();
 
     // allocate the left- and right-hand side vectors
+    let dim = fdm.dim();
     let mut phi = Vector::new(dim);
     let mut rhs = Vector::new(dim);
 

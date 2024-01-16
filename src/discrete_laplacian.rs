@@ -178,10 +178,8 @@ impl DiscreteLaplacian2d {
     ///
     /// # Output
     ///
-    /// Returns `(dim, np, A, C)` where:
+    /// Returns `(A, C)` where:
     ///
-    /// * `dim` -- is the problem dimension; i.e., the number of rows and columns `dim = nx * ny`
-    /// * `np` -- is the number of prescribed rows (i.e., number of essential values)
     /// * `A` -- is the augmented 'Auu' matrix (dim × dim) with ones placed on the diagonal entries
     ///  corresponding to the prescribed essential values. Also, the entries corresponding to the
     ///  essential values are zeroed.
@@ -195,7 +193,7 @@ impl DiscreteLaplacian2d {
     /// # Todo
     ///
     /// * Implement the symmetric version for solvers that can handle a triangular matrix storage.
-    pub fn coefficient_matrix(&mut self) -> Result<(usize, usize, CooMatrix, CooMatrix), StrError> {
+    pub fn coefficient_matrix(&mut self) -> Result<(CooMatrix, CooMatrix), StrError> {
         // count max number of non-zeros
         let dim = self.nx * self.ny;
         let np = self.essential.len();
@@ -239,7 +237,7 @@ impl DiscreteLaplacian2d {
                 aa.put(i, i, 1.0).unwrap();
             }
         }
-        Ok((dim, np, aa, cc))
+        Ok((aa, cc))
     }
 
     /// Execute a loop over the prescribed values
@@ -309,6 +307,22 @@ impl DiscreteLaplacian2d {
             let y = self.ymin + (row as f64) * self.dy;
             callback(i, x, y)
         }
+    }
+
+    /// Returns the dimension of the linear system
+    ///
+    /// ```text
+    /// dim =  nx * ny
+    /// ```
+    pub fn dim(&self) -> usize {
+        self.nx * self.ny
+    }
+
+    /// Returns the number of prescribed equations
+    ///
+    /// The number of prescribed equations is equal to the number of nodes with essential conditions.
+    pub fn num_prescribed(&self) -> usize {
+        self.essential.len()
     }
 }
 
@@ -406,9 +420,9 @@ mod tests {
     #[test]
     fn coefficient_matrix_works() {
         let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 2.0, 0.0, 2.0, 3, 3).unwrap();
-        let (dim, np, aa, _) = lap.coefficient_matrix().unwrap();
-        assert_eq!(dim, 9);
-        assert_eq!(np, 0);
+        let (aa, _) = lap.coefficient_matrix().unwrap();
+        assert_eq!(lap.dim(), 9);
+        assert_eq!(lap.num_prescribed(), 0);
         let ___ = 0.0;
         #[rustfmt::skip]
         let aa_correct = Matrix::from(&[
@@ -453,9 +467,9 @@ mod tests {
         lap.set_essential_boundary_condition(Side::Right, 0.0);
         lap.set_essential_boundary_condition(Side::Bottom, 0.0);
         lap.set_essential_boundary_condition(Side::Top, 0.0);
-        let (dim, np, aa, cc) = lap.coefficient_matrix().unwrap();
-        assert_eq!(dim, 16);
-        assert_eq!(np, 12);
+        let (aa, cc) = lap.coefficient_matrix().unwrap();
+        assert_eq!(lap.dim(), 16);
+        assert_eq!(lap.num_prescribed(), 12);
         const ___: f64 = 0.0;
         #[rustfmt::skip]
         let aa_correct = Matrix::from(&[
