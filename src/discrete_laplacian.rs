@@ -111,15 +111,100 @@ impl DiscreteLaplacian2d {
         };
     }
 
-    /// Computes coefficient matrix 'A' of A ⋅ x = b
+    /// Computes the coefficient matrix 'A' of A ⋅ x = b
     ///
-    /// **Note:** This function must be called after [DiscreteLaplacian2d::set_essential_boundary_condition]
-    pub fn coefficient_matrix(&mut self) -> Result<CooMatrix, StrError> {
-        // allocate 'A' matrix
+    /// **Note:** Consider the following partitioning:
+    ///
+    /// ```text
+    /// ┌          ┐ ┌    ┐   ┌    ┐
+    /// │ Auu  Aup │ │ xu │   │ bu │
+    /// │          │ │    │ = │    │
+    /// │ Apu  App │ │ xp │   │ bp │
+    /// └          ┘ └    ┘   └    ┘
+    /// ```
+    ///
+    /// where `u` means *unknown* and `p` means *prescribed*. Thus, `xu` is the sub-vector with
+    /// unknown essential values and `xp` is the sub-vector with prescribed essential values.
+    ///
+    /// Thus:
+    ///
+    /// ```text
+    /// Auu ⋅ xu  +  Aup ⋅ xp  =  bu
+    /// ```
+    ///
+    /// To handle the prescribed essential values, we modify the system as follows:
+    ///
+    /// ```text
+    /// ┌          ┐ ┌    ┐   ┌             ┐
+    /// │ Auu   0  │ │ xu │   │ bu - Aup⋅xp │
+    /// │          │ │    │ = │             │
+    /// │  0    1  │ │ xp │   │     xp      │
+    /// └          ┘ └    ┘   └             ┘
+    /// A := augmented(Auu)
+    /// ```
+    ///
+    /// Thus:
+    ///
+    /// ```text
+    /// xu = Auu⁻¹ ⋅ (bu - Aup⋅xp)
+    /// xp = xp
+    /// ```
+    ///
+    /// Furthermore, we return an augmented 'Aup' matrix (called 'C', correction matrix), such that:
+    ///
+    /// ```text
+    /// ┌          ┐ ┌    ┐   ┌        ┐
+    /// │  0   Aup │ │ .. │   │ Aup⋅xp │
+    /// │          │ │    │ = │        │
+    /// │  0    0  │ │ xp │   │   0    │
+    /// └          ┘ └    ┘   └        ┘
+    /// C := augmented(Aup)
+    /// ```
+    ///
+    /// Note that there is no performance loss in using the augmented matrix because the sparse
+    /// matrix-vector multiplication will execute the same number of computations with a reduced matrix.
+    /// Also, the CooMatrix will only hold the non-zero entries, thus, no extra memory is wasted.
+    ///
+    /// # Output
+    ///
+    /// Returns `(dim, np, A, C)` where:
+    ///
+    /// * `dim` -- is the problem dimension; i.e., the number of rows and columns `dim = nx * ny`
+    /// * `np` -- is the number of prescribed rows (i.e., number of essential values)
+    /// * `A` -- is the augmented 'Auu' matrix (dim × dim) with ones placed on the diagonal entries
+    ///  corresponding to the prescribed essential values. Also, the entries corresponding to the
+    ///  essential values are zeroed.
+    /// * `C` -- is the augmented 'Aup' (correction) matrix (dim × dim) with only the 'unknown rows'
+    ///   and the 'prescribed' columns.
+    ///
+    /// # Warnings
+    ///
+    /// **Warning:** This function must be called after [DiscreteLaplacian2d::set_essential_boundary_condition]
+    ///
+    /// # Todo
+    ///
+    /// * Implement the symmetric version for solvers that can handle a triangular matrix storage.
+    pub fn coefficient_matrix(&mut self) -> Result<(usize, usize, CooMatrix, CooMatrix), StrError> {
+        // count max number of non-zeros
         let dim = self.nx * self.ny;
-        let max_bandwidth = 5;
-        let max_nnz = dim * max_bandwidth + dim; // the last +dim corresponds to the 1s put on the diagonal
-        let mut aa = CooMatrix::new(dim, dim, max_nnz, None, false)?;
+        let np = self.essential.len();
+        let mut max_nnz_aa = np; // start with the diagonal 'ones'
+        let mut max_nnz_cc = 1; // +1 just for when there are no essential conditions
+        for i in 0..dim {
+            if !self.essential.contains_key(&i) {
+                self.loop_over_bandwidth(i, |j, _| {
+                    if !self.essential.contains_key(&j) {
+                        max_nnz_aa += 1;
+                    } else {
+                        max_nnz_cc += 1;
+                    }
+                });
+            }
+        }
+
+        // allocate matrices
+        let mut aa = CooMatrix::new(dim, dim, max_nnz_aa, None, false)?;
+        let mut cc = CooMatrix::new(dim, dim, max_nnz_cc, None, false)?;
 
         // auxiliary
         let dx2 = self.dx * self.dx;
@@ -128,35 +213,22 @@ impl DiscreteLaplacian2d {
         let beta = self.kx / dx2;
         let gamma = self.ky / dy2;
         let molecule = [alpha, beta, beta, gamma, gamma];
-        let mut jays = [0, 0, 0, 0, 0];
 
-        // loop over all nx * ny equations
+        // assemble
         for i in 0..dim {
             if !self.essential.contains_key(&i) {
-                let col = i % self.nx; // grid column number
-                let row = i / self.nx; // grid row number
-
-                // j-index of grid nodes (mirror if needed)
-                jays[0] = i; // current node
-                jays[1] = if col == 0 { i + 1 } else { i - 1 }; // left node
-                jays[2] = if col == self.nx - 1 { i - 1 } else { i + 1 }; // right node
-                jays[3] = if row == 0 { i + self.nx } else { i - self.nx }; // bottom node
-                jays[4] = if row == self.ny - 1 { i - self.nx } else { i + self.nx }; // top node
-
-                // set 'A' matrix value
-                for (k, j) in jays.iter().enumerate() {
-                    if !self.essential.contains_key(j) {
-                        aa.put(i, *j, molecule[k]).unwrap();
+                self.loop_over_bandwidth(i, |j, b| {
+                    if !self.essential.contains_key(&j) {
+                        aa.put(i, j, molecule[b]).unwrap();
+                    } else {
+                        cc.put(i, j, molecule[b]).unwrap();
                     }
-                }
+                });
+            } else {
+                aa.put(i, i, 1.0).unwrap();
             }
         }
-
-        // put ones on the diagonal corresponding to essential boundary conditions
-        for i in self.essential.keys() {
-            aa.put(*i, *i, 1.0)?;
-        }
-        Ok(aa)
+        Ok((dim, np, aa, cc))
     }
 
     /// Returns a meshgrid of coordinates (e.g., for plotting)
@@ -165,10 +237,39 @@ impl DiscreteLaplacian2d {
     ///
     /// Returns `(xx, yy)` where:
     ///
-    /// `xx` -- (ny * nx) matrix of coordinates
-    /// `yy` -- (ny * nx) matrix of coordinates
+    /// `xx` -- (ny × nx) matrix of coordinates
+    /// `yy` -- (ny × nx) matrix of coordinates
     pub fn get_grid_coordinates(&self) -> (Matrix, Matrix) {
         generate2d(self.xmin, self.xmax, self.ymin, self.ymax, self.nx, self.ny)
+    }
+
+    /// Execute a loop over the bandwidth of the coefficient matrix
+    ///
+    /// # Input
+    ///
+    /// * `i` -- the row index
+    /// * `callback` -- a `function(j, b)` where `j` is the column index and
+    ///   `b` is the bandwidth index, i.e., the index in the molecule array.
+    fn loop_over_bandwidth<F>(&self, i: usize, mut callback: F)
+    where
+        F: FnMut(usize, usize),
+    {
+        // row and column
+        let row = i / self.nx; // grid row number
+        let col = i % self.nx; // grid column number
+
+        // j-index of grid nodes (mirror if needed)
+        let mut jays = [0, 0, 0, 0, 0];
+        jays[0] = i; // current node
+        jays[1] = if col == 0 { i + 1 } else { i - 1 }; // left node
+        jays[2] = if col == self.nx - 1 { i - 1 } else { i + 1 }; // right node
+        jays[3] = if row == 0 { i + self.nx } else { i - self.nx }; // bottom node
+        jays[4] = if row == self.ny - 1 { i - self.nx } else { i + self.nx }; // top node
+
+        // execute callback
+        for (b, &j) in jays.iter().enumerate() {
+            callback(j, b);
+        }
     }
 }
 
@@ -237,7 +338,9 @@ mod tests {
     #[test]
     fn coefficient_matrix_works() {
         let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 2.0, 0.0, 2.0, 3, 3).unwrap();
-        let aa = lap.coefficient_matrix().unwrap();
+        let (dim, np, aa, _) = lap.coefficient_matrix().unwrap();
+        assert_eq!(dim, 9);
+        assert_eq!(np, 0);
         let ___ = 0.0;
         #[rustfmt::skip]
         let aa_correct = Matrix::from(&[
@@ -256,34 +359,78 @@ mod tests {
 
     #[test]
     fn coefficient_matrix_with_essential_prescribed_works() {
+        // The full matrix is:
+        // ┌                                                 ┐
+        // │ -4  2  .  .  2  .  .  .  .  .  .  .  .  .  .  . │  0 prescribed
+        // │  1 -4  1  .  .  2  .  .  .  .  .  .  .  .  .  . │  1 prescribed
+        // │  .  1 -4  1  .  .  2  .  .  .  .  .  .  .  .  . │  2 prescribed
+        // │  .  .  2 -4  .  .  .  2  .  .  .  .  .  .  .  . │  3 prescribed
+        // │  1  .  .  . -4  2  .  .  1  .  .  .  .  .  .  . │  4 prescribed
+        // │  .  1  .  .  1 -4  1  .  .  1  .  .  .  .  .  . │  5
+        // │  .  .  1  .  .  1 -4  1  .  .  1  .  .  .  .  . │  6
+        // │  .  .  .  1  .  .  2 -4  .  .  .  1  .  .  .  . │  7 prescribed
+        // │  .  .  .  .  1  .  .  . -4  2  .  .  1  .  .  . │  8 prescribed
+        // │  .  .  .  .  .  1  .  .  1 -4  1  .  .  1  .  . │  9
+        // │  .  .  .  .  .  .  1  .  .  1 -4  1  .  .  1  . │ 10
+        // │  .  .  .  .  .  .  .  1  .  .  2 -4  .  .  .  1 │ 11 prescribed
+        // │  .  .  .  .  .  .  .  .  2  .  .  . -4  2  .  . │ 12 prescribed
+        // │  .  .  .  .  .  .  .  .  .  2  .  .  1 -4  1  . │ 13 prescribed
+        // │  .  .  .  .  .  .  .  .  .  .  2  .  .  1 -4  1 │ 14 prescribed
+        // │  .  .  .  .  .  .  .  .  .  .  .  2  .  .  2 -4 │ 15 prescribed
+        // └                                                 ┘
+        //    0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+        //    p  p  p  p  p        p  p        p  p  p  p  p
         let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 3.0, 0.0, 3.0, 4, 4).unwrap();
         lap.set_essential_boundary_condition(Side::Left, 0.0);
         lap.set_essential_boundary_condition(Side::Right, 0.0);
         lap.set_essential_boundary_condition(Side::Bottom, 0.0);
         lap.set_essential_boundary_condition(Side::Top, 0.0);
-        let aa = lap.coefficient_matrix().unwrap();
-        let ___ = 0.0;
+        let (dim, np, aa, cc) = lap.coefficient_matrix().unwrap();
+        assert_eq!(dim, 16);
+        assert_eq!(np, 12);
+        const ___: f64 = 0.0;
         #[rustfmt::skip]
         let aa_correct = Matrix::from(&[
-             [1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  0 prescribed
-             [___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  1 prescribed
-             [___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  2 prescribed
-             [___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  3 prescribed
-             [___, ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  4 prescribed
-             [___, ___, ___, ___, ___,-4.0, 1.0, ___, ___, 1.0, ___, ___, ___, ___, ___, ___], //  5
-             [___, ___, ___, ___, ___, 1.0,-4.0, ___, ___, ___, 1.0, ___, ___, ___, ___, ___], //  6
-             [___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___], //  7 prescribed
-             [___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___], //  8 prescribed
-             [___, ___, ___, ___, ___, 1.0, ___, ___, ___,-4.0, 1.0, ___, ___, ___, ___, ___], //  9
-             [___, ___, ___, ___, ___, ___, 1.0, ___, ___, 1.0,-4.0, ___, ___, ___, ___, ___], // 10
-             [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___, ___], // 11 prescribed
-             [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___], // 12 prescribed
-             [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___], // 13 prescribed
-             [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___], // 14 prescribed
-             [___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0], // 15 prescribed
-         ]); //  0   1    2    3    4    5    6    7    8    9   10   11   12   13   14   15
-             //  p   p    p    p    p              p    p              p    p    p    p    p
+             [ 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  0 prescribed
+             [ ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  1 prescribed
+             [ ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  2 prescribed
+             [ ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  3 prescribed
+             [ ___, ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  4 prescribed
+             [ ___, ___, ___, ___, ___,-4.0, 1.0, ___, ___, 1.0, ___, ___, ___, ___, ___, ___], //  5
+             [ ___, ___, ___, ___, ___, 1.0,-4.0, ___, ___, ___, 1.0, ___, ___, ___, ___, ___], //  6
+             [ ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___], //  7 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___], //  8 prescribed
+             [ ___, ___, ___, ___, ___, 1.0, ___, ___, ___,-4.0, 1.0, ___, ___, ___, ___, ___], //  9
+             [ ___, ___, ___, ___, ___, ___, 1.0, ___, ___, 1.0,-4.0, ___, ___, ___, ___, ___], // 10
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___, ___], // 11 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___], // 12 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___], // 13 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___], // 14 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0], // 15 prescribed
+         ]); //  0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15
+             //  p    p    p    p    p              p    p              p    p    p    p    p
         mat_approx_eq(&aa.as_dense(), &aa_correct, 1e-15);
+        #[rustfmt::skip]
+        let cc_correct = Matrix::from(&[
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  0 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  1 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  2 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  3 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  4 prescribed
+             [ ___, 1.0, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  5
+             [ ___, ___, 1.0, ___, ___, ___, ___, 1.0, ___, ___, ___, ___, ___, ___, ___, ___], //  6
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  7 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], //  8 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, ___, ___, 1.0, ___, ___], //  9
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, 1.0, ___, ___, 1.0, ___], // 10
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], // 11 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], // 12 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], // 13 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], // 14 prescribed
+             [ ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___], // 15 prescribed
+         ]); //  0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15
+             //  p    p    p    p    p              p    p              p    p    p    p    p
+        mat_approx_eq(&cc.as_dense(), &cc_correct, 1e-15);
     }
 
     #[test]
