@@ -14,8 +14,8 @@ pub enum Side {
 /// Implements the Finite Difference (FDM) Laplacian operator in 2D
 ///
 /// ```text
-///              ∂²u        ∂²u
-///    L{u} = kx ———  +  ky ———
+///              ∂²ϕ        ∂²ϕ
+///    L{ϕ} = kx ———  +  ky ———
 ///              ∂x²        ∂y²
 /// ```
 ///
@@ -231,16 +231,17 @@ impl DiscreteLaplacian2d {
         Ok((dim, np, aa, cc))
     }
 
-    /// Returns a meshgrid of coordinates (e.g., for plotting)
+    /// Execute a loop over the prescribed values
     ///
-    /// # Output
+    /// # Input
     ///
-    /// Returns `(xx, yy)` where:
-    ///
-    /// `xx` -- (ny × nx) matrix of coordinates
-    /// `yy` -- (ny × nx) matrix of coordinates
-    pub fn get_grid_coordinates(&self) -> (Matrix, Matrix) {
-        generate2d(self.xmin, self.xmax, self.ymin, self.ymax, self.nx, self.ny)
+    /// * `callback` -- a `function(i, value)` where `i` is the row index
+    ///   and `value` is the prescribed value.
+    pub fn loop_over_prescribed_values<F>(&self, mut callback: F)
+    where
+        F: FnMut(usize, f64),
+    {
+        self.essential.iter().for_each(|(n, value)| callback(*n, *value));
     }
 
     /// Execute a loop over the bandwidth of the coefficient matrix
@@ -270,6 +271,18 @@ impl DiscreteLaplacian2d {
         for (b, &j) in jays.iter().enumerate() {
             callback(j, b);
         }
+    }
+
+    /// Returns a meshgrid of coordinates (e.g., for plotting)
+    ///
+    /// # Output
+    ///
+    /// Returns `(xx, yy)` where:
+    ///
+    /// `xx` -- (ny × nx) matrix of coordinates
+    /// `yy` -- (ny × nx) matrix of coordinates
+    pub fn get_grid_coordinates(&self) -> (Matrix, Matrix) {
+        generate2d(self.xmin, self.xmax, self.ymin, self.ymax, self.nx, self.ny)
     }
 }
 
@@ -314,10 +327,11 @@ mod tests {
         assert_eq!(lap.right, &[3, 7, 11, 15]);
         assert_eq!(lap.bottom, &[0, 1, 2, 3]);
         assert_eq!(lap.top, &[12, 13, 14, 15]);
-        let mut essential: Vec<_> = lap.essential.iter().map(|(k, v)| (*k, *v)).collect();
-        essential.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        let mut res = Vec::new();
+        lap.loop_over_prescribed_values(|i, value| res.push((i, value)));
+        res.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
         assert_eq!(
-            essential,
+            res,
             &[
                 (0, BOT),  // bottom* and left  (wins*)
                 (1, BOT),  // bottom
