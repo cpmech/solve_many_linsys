@@ -111,6 +111,22 @@ impl DiscreteLaplacian2d {
         };
     }
 
+    /// Sets homogeneous boundary conditions (i.e., zero essential values at the borders)
+    pub fn set_homogeneous_boundary_conditions(&mut self) {
+        self.left.iter().for_each(|n| {
+            self.essential.insert(*n, 0.0);
+        });
+        self.right.iter().for_each(|n| {
+            self.essential.insert(*n, 0.0);
+        });
+        self.bottom.iter().for_each(|n| {
+            self.essential.insert(*n, 0.0);
+        });
+        self.top.iter().for_each(|n| {
+            self.essential.insert(*n, 0.0);
+        });
+    }
+
     /// Computes the coefficient matrix 'A' of A ⋅ x = b
     ///
     /// **Note:** Consider the following partitioning:
@@ -345,6 +361,36 @@ mod tests {
                 (13, TOP), // top
                 (14, TOP), // top
                 (15, TOP), // top* and right
+            ]
+        );
+    }
+
+    #[test]
+    fn set_homogeneous_boundary_condition_works() {
+        let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 3.0, 0.0, 3.0, 4, 4).unwrap();
+        lap.set_homogeneous_boundary_conditions();
+        assert_eq!(lap.left, &[0, 4, 8, 12]);
+        assert_eq!(lap.right, &[3, 7, 11, 15]);
+        assert_eq!(lap.bottom, &[0, 1, 2, 3]);
+        assert_eq!(lap.top, &[12, 13, 14, 15]);
+        let mut res = Vec::new();
+        lap.loop_over_prescribed_values(|i, value| res.push((i, value)));
+        res.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        assert_eq!(
+            res,
+            &[
+                (0, 0.0),
+                (1, 0.0),
+                (2, 0.0),
+                (3, 0.0),
+                (4, 0.0),
+                (7, 0.0),
+                (8, 0.0),
+                (11, 0.0),
+                (12, 0.0),
+                (13, 0.0),
+                (14, 0.0),
+                (15, 0.0),
             ]
         );
     }
