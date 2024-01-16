@@ -31,6 +31,8 @@ The analytical solution is:
 ϕ(x, y) = x (1 - x) y (1 - y) (1 + 2x + 7y)
 ```
 
+The Rust code is shown below (from [test_heat_equation_source.rs](https://github.com/cpmech/solve_many_linsys/blob/main/tests/test_heat_equation_source.rs))
+
 ```rust
 // allocate the Laplacian operator
 let (nx, ny) = (11, 11);
@@ -73,6 +75,6 @@ solver.actual.factorize(&mut mat, None)?;
 solver.actual.solve(&mut phi, &mut mat, &rhs, false)?;
 ```
 
-The figure below show the results (see file TODO for how to generate the figure):
+The figure below show the results (see [test_heat_equation_source.rs](https://github.com/cpmech/solve_many_linsys/blob/main/tests/test_heat_equation_source.rs))
 
 ![Heat equation with source term](data/figures/test_heat_equation_source.svg)
