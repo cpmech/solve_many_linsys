@@ -2,6 +2,7 @@
   "cSpell.words": [
     "allreduce",
     "linsys",
+    "mpiexec",
     "msgpass"
   ]
 }

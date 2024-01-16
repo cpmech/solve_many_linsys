@@ -5,7 +5,55 @@ This code shows how to solve many linear systems using MPI and [russell](https:/
 > [!NOTE]
 > This code requires `RUSSELL_SPARSE_USE_LOCAL_MUMPS=1` environment variable. Thus, you must compile MUMPS locally (it's easy!) as explained in [russell](https://github.com/cpmech/russell/). The problem is that Debian's libmumps-seq is linked with OpenMPI (it shouldn't!). This linkage clashes with the MPI code used here.
 
-Work in progress...
+## Solve the heat equation in parallel
+
+We can solve multiple linear systems using the code snippet:
+
+```rust
+// initialize the MPI engine
+mpi_init_thread(MpiThread::Serialized)?;
+
+// allocate MPI communicator and determine this processor's rank
+let mut comm = Communicator::new()?;
+let rank = comm.rank()?;
+
+// create coefficient matrix
+let (fdm, mut mat) = create_discrete_laplacian(opt.nx, opt.nx, one_based);
+
+// allocate linear solver
+let mut solver = LinSolver::new(genie)?;
+
+// perform the factorization
+solver.actual.factorize(&mut mat, None)?;
+
+// allocate the solution vector
+let mut x = Vector::new(dim);
+
+// solve many times with increasing multipliers
+const MULTIPLIERS: &[f64] = &[1.0, 2.0, 5.0, 10.0, 100.0];
+for multiplier in MULTIPLIERS {
+    // perform the solution
+    let b = populate_rhs_vector(&fdm, *multiplier);
+    solver.actual.solve(&mut x, &mat, &b, false)?;
+
+    // synchronize
+    comm.barrier()?;
+}
+```
+
+Execute the code by calling:
+
+```bash
+mpiexec --np 2 target/mpi_heat_equation -- 1000 umfpack
+```
+
+Or:
+
+```bash
+/run-mpi-heat-equation.bash 2 1000 umfpack
+```
+
+where 2 is the number of MPI processes, 1000 is the grid division along one direction, and umfpack is the linear solver.
 
 ## non-MPI examples
 
