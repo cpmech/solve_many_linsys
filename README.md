@@ -7,9 +7,76 @@ This code shows how to solve many linear systems using MPI and [russell](https:/
 
 Work in progress...
 
+## non-MPI examples
+
+## Poisson's equation in 2D
+
+Approximate (with the Finite Differences Method, FDM) the solution of
+
+```text
+∂²ϕ     ∂²ϕ
+———  +  ——— = 0
+∂x²     ∂y²
+```
+
+on a (1.0 × 1.0) rectangle with the following essential (Dirichlet) boundary conditions:
+
+* left:    `ϕ(0.0, y) = 50.0`
+* right:   `ϕ(1.0, y) = 0.0`
+* bottom:  `ϕ(x, 0.0) = 0.0`
+* top:     `ϕ(x, 1.0) = 50.0`
+
+The Rust code is shown below (from [ex_non_mpi_heat_equation.rs](https://github.com/cpmech/solve_many_linsys/blob/main/examples/ex_non_mpi_heat_equation.rs))
+
+```rust
+// allocate the Laplacian operator
+let (nx, ny) = (31, 31);
+let mut fdm = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 1.0, 0.0, 1.0, nx, ny).unwrap();
+
+// set essential boundary conditions
+fdm.set_essential_boundary_condition(Side::Left, 50.0);
+fdm.set_essential_boundary_condition(Side::Right, 0.0);
+fdm.set_essential_boundary_condition(Side::Bottom, 0.0);
+fdm.set_essential_boundary_condition(Side::Top, 50.0);
+
+// compute the augmented coefficient matrix and the correction matrix
+let (dim, _, aa, cc) = fdm.coefficient_matrix().unwrap();
+
+// allocate the left- and right-hand side vectors
+let mut phi = Vector::new(dim);
+let mut rhs = Vector::new(dim);
+
+// set the 'prescribed' part of the left-hand side vector with the essential values
+fdm.loop_over_prescribed_values(|i, value| {
+    phi[i] = value; // xp := xp
+});
+
+// initialize the right-hand side vector with the correction
+cc.mat_vec_mul(&mut rhs, -1.0, &phi)?; // bu := -Aup⋅xp
+
+// if there where natural (Neumann) boundary conditions,
+// we could set `bu := natural()` here
+
+// set the 'prescribed' part of the right-hand side vector with the essential values
+fdm.loop_over_prescribed_values(|i, value| {
+    rhs[i] = value; // bp := xp
+});
+
+// solve the linear system
+let mut mat = SparseMatrix::from_coo(aa);
+let mut solver = LinSolver::new(Genie::Umfpack)?;
+solver.actual.factorize(&mut mat, None)?;
+solver.actual.solve(&mut phi, &mut mat, &rhs, false)?;
+```
+
+The figure below show the results (see [ex_non_mpi_heat_equation.rs](https://github.com/cpmech/solve_many_linsys/blob/main/examples/ex_non_mpi_heat_equation.rs))
+
+![2D Poisson equation](data/figures/ex_non_mpi_heat_equation.svg)
+
 ## non-MPI tests
 
-### Heat equation with source term
+
+### 2D heat equation with source term
 
 Approximate (with the Finite Differences Method, FDM) the solution of
 
