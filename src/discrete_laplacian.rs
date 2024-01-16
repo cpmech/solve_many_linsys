@@ -284,7 +284,7 @@ impl DiscreteLaplacian2d {
         }
     }
 
-    /// Execute a loop of the grid points
+    /// Execute a loop over the grid points
     ///
     /// # Input
     ///
