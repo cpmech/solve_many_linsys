@@ -1,5 +1,4 @@
 use crate::StrError;
-use russell_lab::{generate2d, Matrix};
 use russell_sparse::CooMatrix;
 use std::collections::HashMap;
 
@@ -27,9 +26,7 @@ pub struct DiscreteLaplacian2d {
     kx: f64,            // diffusion parameter x
     ky: f64,            // diffusion parameter y
     xmin: f64,          // min x coordinate
-    xmax: f64,          // max x coordinate
     ymin: f64,          // min y coordinate
-    ymax: f64,          // max y coordinate
     nx: usize,          // number of points along x (≥ 2)
     ny: usize,          // number of points along y (≥ 2)
     dx: f64,            // grid spacing along x
@@ -78,9 +75,7 @@ impl DiscreteLaplacian2d {
             kx,
             ky,
             xmin,
-            xmax,
             ymin,
-            ymax,
             nx,
             ny,
             dx: (xmax - xmin) / ((nx - 1) as f64),
@@ -289,16 +284,31 @@ impl DiscreteLaplacian2d {
         }
     }
 
-    /// Returns a meshgrid of coordinates (e.g., for plotting)
+    /// Execute a loop of the grid points
     ///
-    /// # Output
+    /// # Input
     ///
-    /// Returns `(xx, yy)` where:
+    /// * `callback` -- a `function(i, x, y)` where `i` is the point number and
+    ///   `(x, y)` are the grid point coordinates.
     ///
-    /// `xx` -- (ny × nx) matrix of coordinates
-    /// `yy` -- (ny × nx) matrix of coordinates
-    pub fn get_grid_coordinates(&self) -> (Matrix, Matrix) {
-        generate2d(self.xmin, self.xmax, self.ymin, self.ymax, self.nx, self.ny)
+    /// The row and column indices of the grid point can be determined with:
+    ///
+    /// ```text
+    /// let row = i / nx;
+    /// let col = i % nx;
+    /// ```
+    pub fn loop_over_grid_points<F>(&self, mut callback: F)
+    where
+        F: FnMut(usize, f64, f64),
+    {
+        let dim = self.nx * self.ny;
+        for i in 0..dim {
+            let row = i / self.nx;
+            let col = i % self.nx;
+            let x = self.xmin + (col as f64) * self.dx;
+            let y = self.ymin + (row as f64) * self.dy;
+            callback(i, x, y)
+        }
     }
 }
 
@@ -315,9 +325,7 @@ mod tests {
         assert_eq!(lap.kx, 7.0);
         assert_eq!(lap.ky, 8.0);
         assert_eq!(lap.xmin, -1.0);
-        assert_eq!(lap.xmax, 1.0);
         assert_eq!(lap.ymin, -3.0);
-        assert_eq!(lap.ymax, 3.0);
         assert_eq!(lap.nx, 2);
         assert_eq!(lap.ny, 3);
         assert_eq!(lap.dx, 2.0);
@@ -495,8 +503,16 @@ mod tests {
 
     #[test]
     fn get_grid_coordinates_works() {
-        let lap = DiscreteLaplacian2d::new(7.0, 8.0, -1.0, 1.0, -3.0, 3.0, 2, 3).unwrap();
-        let (xx, yy) = lap.get_grid_coordinates();
+        let (nx, ny) = (2, 3);
+        let lap = DiscreteLaplacian2d::new(7.0, 8.0, -1.0, 1.0, -3.0, 3.0, nx, ny).unwrap();
+        let mut xx = Matrix::new(ny, nx);
+        let mut yy = Matrix::new(ny, nx);
+        lap.loop_over_grid_points(|i, x, y| {
+            let row = i / nx;
+            let col = i % nx;
+            xx.set(row, col, x);
+            yy.set(row, col, y);
+        });
         assert_eq!(
             format!("{}", xx),
             "┌       ┐\n\
