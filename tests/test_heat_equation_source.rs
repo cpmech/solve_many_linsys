@@ -35,9 +35,7 @@ fn main() -> Result<(), StrError> {
     let mut rhs = Vector::new(dim);
 
     // set the 'prescribed' part of the left-hand side vector with the essential values
-    fdm.loop_over_prescribed_values(|i, value| {
-        phi[i] = value; // xp := xp
-    });
+    // (this step is not needed with homogeneous boundary conditions)
 
     // initialize the right-hand side vector with the correction
     // (this step is not needed with homogeneous boundary conditions)
