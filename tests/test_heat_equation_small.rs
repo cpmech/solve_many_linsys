@@ -42,7 +42,7 @@ fn main() -> Result<(), StrError> {
     // │  0    0  │ │ xp │   │   0    │
     // └          ┘ └    ┘   └        ┘
     // C := augmented(Aup)
-    let (aa, cc) = fdm.coefficient_matrix().unwrap();
+    let (aa, cc) = fdm.coefficient_matrix(false).unwrap();
 
     // allocate the left- and right-hand side vectors
     let dim = fdm.dim();

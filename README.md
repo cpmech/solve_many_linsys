@@ -40,9 +40,10 @@ fdm.set_essential_boundary_condition(Side::Bottom, 0.0);
 fdm.set_essential_boundary_condition(Side::Top, 50.0);
 
 // compute the augmented coefficient matrix and the correction matrix
-let (dim, _, aa, cc) = fdm.coefficient_matrix().unwrap();
+let (aa, cc) = fdm.coefficient_matrix(false).unwrap();
 
 // allocate the left- and right-hand side vectors
+let dim = fdm.dim();
 let mut phi = Vector::new(dim);
 let mut rhs = Vector::new(dim);
 
@@ -109,9 +110,10 @@ let mut fdm = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 1.0, 0.0, 1.0, nx, ny).unw
 fdm.set_homogeneous_boundary_conditions();
 
 // compute the augmented coefficient matrix
-let (dim, _, aa, _) = fdm.coefficient_matrix().unwrap();
+let (aa, _) = fdm.coefficient_matrix(false).unwrap();
 
 // allocate the left- and right-hand side vectors
+let dim = fdm.dim();
 let mut phi = Vector::new(dim);
 let mut rhs = Vector::new(dim);
 

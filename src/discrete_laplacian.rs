@@ -176,6 +176,10 @@ impl DiscreteLaplacian2d {
     /// matrix-vector multiplication will execute the same number of computations with a reduced matrix.
     /// Also, the CooMatrix will only hold the non-zero entries, thus, no extra memory is wasted.
     ///
+    /// # Input
+    ///
+    /// * `one_based` -- use FORTRAN notation (e.g., for MUMPS)
+    ///
     /// # Output
     ///
     /// Returns `(A, C)` where:
@@ -193,7 +197,7 @@ impl DiscreteLaplacian2d {
     /// # Todo
     ///
     /// * Implement the symmetric version for solvers that can handle a triangular matrix storage.
-    pub fn coefficient_matrix(&mut self) -> Result<(CooMatrix, CooMatrix), StrError> {
+    pub fn coefficient_matrix(&mut self, one_based: bool) -> Result<(CooMatrix, CooMatrix), StrError> {
         // count max number of non-zeros
         let dim = self.nx * self.ny;
         let np = self.essential.len();
@@ -212,8 +216,8 @@ impl DiscreteLaplacian2d {
         }
 
         // allocate matrices
-        let mut aa = CooMatrix::new(dim, dim, max_nnz_aa, None, false)?;
-        let mut cc = CooMatrix::new(dim, dim, max_nnz_cc, None, false)?;
+        let mut aa = CooMatrix::new(dim, dim, max_nnz_aa, None, one_based)?;
+        let mut cc = CooMatrix::new(dim, dim, max_nnz_cc, None, one_based)?;
 
         // auxiliary
         let dx2 = self.dx * self.dx;
@@ -420,7 +424,7 @@ mod tests {
     #[test]
     fn coefficient_matrix_works() {
         let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 2.0, 0.0, 2.0, 3, 3).unwrap();
-        let (aa, _) = lap.coefficient_matrix().unwrap();
+        let (aa, _) = lap.coefficient_matrix(false).unwrap();
         assert_eq!(lap.dim(), 9);
         assert_eq!(lap.num_prescribed(), 0);
         let ___ = 0.0;
@@ -467,7 +471,7 @@ mod tests {
         lap.set_essential_boundary_condition(Side::Right, 0.0);
         lap.set_essential_boundary_condition(Side::Bottom, 0.0);
         lap.set_essential_boundary_condition(Side::Top, 0.0);
-        let (aa, cc) = lap.coefficient_matrix().unwrap();
+        let (aa, cc) = lap.coefficient_matrix(false).unwrap();
         assert_eq!(lap.dim(), 16);
         assert_eq!(lap.num_prescribed(), 12);
         const ___: f64 = 0.0;

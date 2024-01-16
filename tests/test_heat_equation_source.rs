@@ -31,7 +31,7 @@ fn main() -> Result<(), StrError> {
     fdm.set_homogeneous_boundary_conditions();
 
     // compute the augmented coefficient matrix
-    let (aa, _) = fdm.coefficient_matrix().unwrap();
+    let (aa, _) = fdm.coefficient_matrix(false).unwrap();
 
     // allocate the left- and right-hand side vectors
     let dim = fdm.dim();
