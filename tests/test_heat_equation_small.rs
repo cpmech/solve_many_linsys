@@ -56,7 +56,7 @@ fn main() -> Result<(), StrError> {
     // initialize the right-hand side vector with the correction
     cc.mat_vec_mul(&mut b, -1.0, &x)?; // bu := -Aup⋅xp
 
-    // if there where natural (Neumann) boundary conditions,
+    // if there were natural (Neumann) boundary conditions,
     // we could set `bu := natural()` here
 
     // set the 'prescribed' part of the right-hand side vector with the essential values
