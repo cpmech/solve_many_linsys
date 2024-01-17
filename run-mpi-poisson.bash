@@ -15,7 +15,7 @@ fi
 
 cargo build --release --target-dir $OUT_DIR
 
-BIN=$OUT_DIR/release/mpi_heat_equation
+BIN=$OUT_DIR/release/mpi_poisson
 
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1

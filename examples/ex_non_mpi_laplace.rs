@@ -76,6 +76,6 @@ fn main() -> Result<(), StrError> {
     plot.add(&contour);
     plot.set_equal_axes(true)
         .set_figure_size_points(600.0, 600.0)
-        .save("/tmp/solve_many_linsys/ex_non_mpi_heat_equation.svg")?;
+        .save("/tmp/solve_many_linsys/ex_non_mpi_laplace.svg")?;
     Ok(())
 }

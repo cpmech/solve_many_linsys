@@ -1,11 +1,21 @@
-use msgpass::{mpi_finalize, mpi_init_thread, Communicator, MpiOpInt, MpiThread};
+use msgpass::{mpi_finalize, mpi_init_thread, Communicator, MpiThread};
 use russell_lab::{Stopwatch, StrError, Vector};
 use russell_sparse::{Genie, LinSolver, SparseMatrix};
 use solve_many_linsys::DiscreteLaplacian2d;
+use std::fmt;
 use structopt::StructOpt;
 
-const ROOT: usize = 0;
-const TOLERANCE: f64 = 1e-10;
+// Approximate (with the Finite Differences Method, FDM) the solution of
+//
+// ∂²ϕ   ∂²ϕ
+// ——— + ——— = multiplier * 2 x (y - 1) (y - 2 x + x y + 2) exp(x - y)
+// ∂x²   ∂y²
+//
+// on a (1.0 × 1.0) square with the homogeneous boundary conditions.
+//
+// The analytical solution is:
+//
+// ϕ(x, y) = multiplier * x y (x - 1) (y - 1) exp(x - y)
 
 fn create_discrete_laplacian(nx: usize, ny: usize, one_based: bool) -> (DiscreteLaplacian2d, SparseMatrix) {
     let mut fdm = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 1.0, 0.0, 1.0, nx, ny).unwrap();
@@ -19,11 +29,7 @@ fn populate_rhs_vector(fdm: &DiscreteLaplacian2d, multiplier: f64) -> Vector {
     let dim = fdm.dim();
     let mut rhs = Vector::new(dim);
     fdm.loop_over_grid_points(|i, x, y| {
-        let (xx, yy) = (x * x, y * y);
-        let (xxx, yyy) = (xx * x, yy * y);
-        let source =
-            14.0 * yyy - (16.0 - 12.0 * x) * yy - (-42.0 * xx + 54.0 * x - 2.0) * y + 4.0 * xxx - 16.0 * xx + 12.0 * x;
-        rhs[i] = multiplier * source;
+        rhs[i] = multiplier * 2.0 * x * (y - 1.0) * (y - 2.0 * x + x * y + 2.0) * f64::exp(x - y);
     });
     fdm.loop_over_prescribed_values(|i, value| {
         rhs[i] = value;
@@ -31,15 +37,16 @@ fn populate_rhs_vector(fdm: &DiscreteLaplacian2d, multiplier: f64) -> Vector {
     rhs
 }
 
-fn match_analytical_solution(fdm: &DiscreteLaplacian2d, num: &Vector, multiplier: f64) -> u32 {
-    let mut ok = 1;
+fn compare_analytical_solution(fdm: &DiscreteLaplacian2d, num: &Vector, multiplier: f64) -> f64 {
+    let mut err_max = 0.0;
     fdm.loop_over_grid_points(|i, x, y| {
-        let ana = multiplier * x * (1.0 - x) * y * (1.0 - y) * (1.0 + 2.0 * x + 7.0 * y);
-        if f64::abs(num[i] - ana) > TOLERANCE {
-            ok = 0;
+        let ana = multiplier * x * y * (x - 1.0) * (y - 1.0) * f64::exp(x - y);
+        let err = f64::abs(num[i] - ana);
+        if err > err_max {
+            err_max = err
         }
     });
-    ok
+    err_max
 }
 
 #[derive(StructOpt)]
@@ -50,6 +57,8 @@ struct Options {
     #[structopt(default_value = "Umfpack")]
     genie: String,
 }
+
+const ROOT: usize = 0;
 
 fn main() -> Result<(), StrError> {
     // initialize the MPI engine
@@ -93,27 +102,16 @@ fn main() -> Result<(), StrError> {
         let b = populate_rhs_vector(&fdm, *multiplier);
         solver.actual.solve(&mut x, &mat, &b, false)?;
 
-        // message
+        // compare the results
+        let err_max = compare_analytical_solution(&fdm, &x, *multiplier);
+
+        // gather the results
         if rank == ROOT {
-            print!("done with multiplier = {:>3}", multiplier);
-        }
-
-        // check the results
-        let ok = match_analytical_solution(&fdm, &x, *multiplier);
-
-        // share the results among all processors
-        let mut all_ok = [0];
-        comm.allreduce_u32(&mut all_ok, &[ok], MpiOpInt::Land)?;
-
-        // message
-        if all_ok[0] == 1 {
-            if rank == ROOT {
-                println!(" (success)")
-            }
+            let mut all_err_max = vec![0.0; size];
+            comm.gather_f64(ROOT, Some(&mut all_err_max), &[err_max])?;
+            println!("multiplier = {:>3}, errors ={}", multiplier, P(all_err_max));
         } else {
-            if rank == ROOT {
-                println!(" (failed)")
-            }
+            comm.gather_f64(ROOT, None, &[err_max])?;
         }
     }
 
@@ -126,4 +124,15 @@ fn main() -> Result<(), StrError> {
     // finalize the MPI engine
     mpi_finalize()?;
     Ok(())
+}
+
+struct P(Vec<f64>);
+
+impl fmt::Display for P {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for v in &self.0 {
+            write!(f, "{:5.0e}", v)?;
+        }
+        Ok(())
+    }
 }
