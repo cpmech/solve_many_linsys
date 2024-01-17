@@ -3,7 +3,7 @@ use russell_lab::{vec_approx_eq, StrError, Vector};
 use russell_sparse::{Genie, LinSolver, SparseMatrix};
 use solve_many_linsys::DiscreteLaplacian2d;
 
-const SAVE_FIGURE: bool = false;
+const SAVE_FIGURE: bool = true;
 
 #[test]
 fn main() -> Result<(), StrError> {
@@ -100,7 +100,7 @@ fn main() -> Result<(), StrError> {
         plot.add(&contour_num).add(&contour_ana);
         plot.set_equal_axes(true)
             .set_figure_size_points(600.0, 600.0)
-            .save("/tmp/solve_many_linsys/test_heat_equation_source.svg")?;
+            .save("/tmp/solve_many_linsys/test_poisson_2.svg")?;
     }
     Ok(())
 }
