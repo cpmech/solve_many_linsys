@@ -22,10 +22,10 @@ fn main() -> Result<(), StrError> {
     let mut fdm = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 3.0, 0.0, 3.0, 4, 4).unwrap();
 
     // set essential boundary conditions
-    fdm.set_essential_boundary_condition(Side::Left, 1.0);
-    fdm.set_essential_boundary_condition(Side::Right, 2.0);
-    fdm.set_essential_boundary_condition(Side::Bottom, 1.0);
-    fdm.set_essential_boundary_condition(Side::Top, 2.0);
+    fdm.set_essential_boundary_condition(Side::Left, |_, _| 1.0);
+    fdm.set_essential_boundary_condition(Side::Right, |_, _| 2.0);
+    fdm.set_essential_boundary_condition(Side::Bottom, |_, _| 1.0);
+    fdm.set_essential_boundary_condition(Side::Top, |_, _| 2.0);
 
     // compute the augmented coefficient matrix and the correction matrix
     //

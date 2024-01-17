@@ -2,6 +2,9 @@ use crate::StrError;
 use russell_sparse::CooMatrix;
 use std::collections::HashMap;
 
+/// Defines a function of space that returns f64 (e.g., to calculate boundary condition values)
+pub type FnSpace = fn(x: f64, y: f64) -> f64;
+
 /// Specifies the (boundary) side of a rectangle
 pub enum Side {
     Left,
@@ -38,7 +41,7 @@ pub struct DiscreteLaplacian2d {
 
     /// Collects the essential boundary conditions
     /// Maps node => prescribed_value
-    essential: HashMap<usize, f64>,
+    essential: HashMap<usize, FnSpace>,
 }
 
 impl DiscreteLaplacian2d {
@@ -89,7 +92,7 @@ impl DiscreteLaplacian2d {
     }
 
     /// Sets essential (Dirichlet) boundary condition
-    pub fn set_essential_boundary_condition(&mut self, side: Side, value: f64) {
+    pub fn set_essential_boundary_condition(&mut self, side: Side, value: FnSpace) {
         match side {
             Side::Left => self.left.iter().for_each(|n| {
                 self.essential.insert(*n, value);
@@ -109,16 +112,16 @@ impl DiscreteLaplacian2d {
     /// Sets homogeneous boundary conditions (i.e., zero essential values at the borders)
     pub fn set_homogeneous_boundary_conditions(&mut self) {
         self.left.iter().for_each(|n| {
-            self.essential.insert(*n, 0.0);
+            self.essential.insert(*n, |_, _| 0.0);
         });
         self.right.iter().for_each(|n| {
-            self.essential.insert(*n, 0.0);
+            self.essential.insert(*n, |_, _| 0.0);
         });
         self.bottom.iter().for_each(|n| {
-            self.essential.insert(*n, 0.0);
+            self.essential.insert(*n, |_, _| 0.0);
         });
         self.top.iter().for_each(|n| {
-            self.essential.insert(*n, 0.0);
+            self.essential.insert(*n, |_, _| 0.0);
         });
     }
 
@@ -254,7 +257,13 @@ impl DiscreteLaplacian2d {
     where
         F: FnMut(usize, f64),
     {
-        self.essential.iter().for_each(|(n, value)| callback(*n, *value));
+        self.essential.iter().for_each(|(i, value)| {
+            let row = i / self.nx;
+            let col = i % self.nx;
+            let x = self.xmin + (col as f64) * self.dx;
+            let y = self.ymin + (row as f64) * self.dy;
+            callback(*i, value(x, y));
+        });
     }
 
     /// Execute a loop over the bandwidth of the coefficient matrix
@@ -269,8 +278,8 @@ impl DiscreteLaplacian2d {
         F: FnMut(usize, usize),
     {
         // row and column
-        let row = i / self.nx; // grid row number
-        let col = i % self.nx; // grid column number
+        let row = i / self.nx;
+        let col = i % self.nx;
 
         // j-index of grid nodes (mirror if needed)
         let mut jays = [0, 0, 0, 0, 0];
@@ -361,10 +370,14 @@ mod tests {
         const RIG: f64 = 2.0;
         const BOT: f64 = 3.0;
         const TOP: f64 = 4.0;
-        lap.set_essential_boundary_condition(Side::Left, LEF); //    0*   4   8  12*
-        lap.set_essential_boundary_condition(Side::Right, RIG); //   3*   7  11  15
-        lap.set_essential_boundary_condition(Side::Bottom, BOT); //  0*   1   2   3
-        lap.set_essential_boundary_condition(Side::Top, TOP); //    12*  13  14  15*  (corner*)
+        let lef = |_, _| LEF;
+        let rig = |_, _| RIG;
+        let bot = |_, _| BOT;
+        let top = |_, _| TOP;
+        lap.set_essential_boundary_condition(Side::Left, lef); //    0*   4   8  12*
+        lap.set_essential_boundary_condition(Side::Right, rig); //   3*   7  11  15
+        lap.set_essential_boundary_condition(Side::Bottom, bot); //  0*   1   2   3
+        lap.set_essential_boundary_condition(Side::Top, top); //    12*  13  14  15*  (corner*)
         assert_eq!(lap.left, &[0, 4, 8, 12]);
         assert_eq!(lap.right, &[3, 7, 11, 15]);
         assert_eq!(lap.bottom, &[0, 1, 2, 3]);
@@ -467,10 +480,7 @@ mod tests {
         //    0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
         //    p  p  p  p  p        p  p        p  p  p  p  p
         let mut lap = DiscreteLaplacian2d::new(1.0, 1.0, 0.0, 3.0, 0.0, 3.0, 4, 4).unwrap();
-        lap.set_essential_boundary_condition(Side::Left, 0.0);
-        lap.set_essential_boundary_condition(Side::Right, 0.0);
-        lap.set_essential_boundary_condition(Side::Bottom, 0.0);
-        lap.set_essential_boundary_condition(Side::Top, 0.0);
+        lap.set_homogeneous_boundary_conditions();
         let (aa, cc) = lap.coefficient_matrix(false).unwrap();
         assert_eq!(lap.dim(), 16);
         assert_eq!(lap.num_prescribed(), 12);
