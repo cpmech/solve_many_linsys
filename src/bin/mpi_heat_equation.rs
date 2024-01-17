@@ -1,4 +1,4 @@
-use msgpass::{mpi_finalize, mpi_init_thread, Communicator, MpiOp, MpiThread};
+use msgpass::{mpi_finalize, mpi_init_thread, Communicator, MpiOpInt, MpiThread};
 use russell_lab::{Stopwatch, StrError, Vector};
 use russell_sparse::{Genie, LinSolver, SparseMatrix};
 use solve_many_linsys::DiscreteLaplacian2d;
@@ -93,9 +93,6 @@ fn main() -> Result<(), StrError> {
         let b = populate_rhs_vector(&fdm, *multiplier);
         solver.actual.solve(&mut x, &mat, &b, false)?;
 
-        // synchronize
-        comm.barrier()?;
-
         // message
         if rank == ROOT {
             print!("done with multiplier = {:>3}", multiplier);
@@ -106,7 +103,7 @@ fn main() -> Result<(), StrError> {
 
         // share the results among all processors
         let mut all_ok = [0];
-        comm.allreduce_u32(&mut all_ok, &[ok], MpiOp::Land)?;
+        comm.allreduce_u32(&mut all_ok, &[ok], MpiOpInt::Land)?;
 
         // message
         if all_ok[0] == 1 {
