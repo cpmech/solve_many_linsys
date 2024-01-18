@@ -57,6 +57,21 @@ where 2 is the number of MPI processes, 1000 is the grid division along one dire
 
 This problem is [perfectly parallel](https://en.wikipedia.org/wiki/Embarrassingly_parallel) thus the total elapsed time should not depend on the number of (real) machine cores. However, the shared use of resources (e.g., memory) may cause some performance losses. Some results are shown below.
 
+**Mumps** (see [log-mumps.txt](https://github.com/cpmech/solve_many_linsys/blob/main/log-mumps.txt))
+
+```text
+size = 1, nx = 1000, dim = 1000000, genie = Mumps
+elapsed time ~ 5.149872364s
+
+size = 4, nx = 1000, dim = 1000000, genie = Mumps
+elapsed time ~ 5.635183616s
+
+size = 8, nx = 1000, dim = 1000000, genie = Mumps
+elapsed time ~ 6.014376048s
+
+size = 24, nx = 1000, dim = 1000000, genie = Mumps
+elapsed time ~ 11.618588898s
+```
 
 **Umfpack:** (see [log-umfpack.txt](https://github.com/cpmech/solve_many_linsys/blob/main/log-umfpack.txt))
 
@@ -67,24 +82,16 @@ elapsed time ~ 6.474512896s
 size = 4, nx = 1000, dim = 1000000, genie = Umfpack
 elapsed time ~ 8.152130192s
 
+size = 8, nx = 1000, dim = 1000000, genie = Umfpack
+elapsed time ~ 11.103594675s
+
 size = 24, nx = 1000, dim = 1000000, genie = Umfpack
 elapsed time ~ 29.423033658s
 ```
 
-**Mumps** (see [log-mumps.txt](https://github.com/cpmech/solve_many_linsys/blob/main/log-mumps.txt))
-
-```text
-size = 1, nx = 1000, dim = 1000000, genie = Mumps
-elapsed time ~ 5.149872364s
-
-size = 4, nx = 1000, dim = 1000000, genie = Mumps
-elapsed time ~ 5.635183616s
-
-size = 24, nx = 1000, dim = 1000000, genie = Mumps
-elapsed time ~ 11.618588898s
-```
-
 It is worth noting that UMFPACK requires more memory usage and allocations than MUMPS. Thus, this may explain its non-optimal performance.
+
+Note: The results are collected on a 13th Gen Intel(R) Core(TM) i9-13900K with 24 cores (8 performance cores and 16 efficient cores).
 
 ## non-MPI examples and tests
 
