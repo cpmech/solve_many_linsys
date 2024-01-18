@@ -1,0 +1,91 @@
+size = 1, nx = 1000, dim = 1000000, genie = Mumps
+multiplier =   1, errors = 3e-8
+multiplier =   2, errors = 7e-8
+multiplier =   5, errors = 2e-7
+multiplier =  10, errors = 3e-7
+multiplier = 100, errors = 3e-6
+0: elapsed time = 5.149872364s
+size = 2, nx = 1000, dim = 1000000, genie = Mumps
+multiplier =   1, errors = 3e-8 3e-8
+multiplier =   2, errors = 7e-8 7e-8
+multiplier =   5, errors = 2e-7 2e-7
+multiplier =  10, errors = 3e-7 3e-7
+multiplier = 100, errors = 3e-6 3e-6
+0: elapsed time = 5.234540224s
+1: elapsed time = 5.23060646s
+size = 4, nx = 1000, dim = 1000000, genie = Mumps
+multiplier =   1, errors = 3e-8 3e-8 3e-8 3e-8
+multiplier =   2, errors = 7e-8 7e-8 7e-8 7e-8
+multiplier =   5, errors = 2e-7 2e-7 2e-7 2e-7
+multiplier =  10, errors = 3e-7 3e-7 3e-7 3e-7
+multiplier = 100, errors = 3e-6 3e-6 3e-6 3e-6
+0: elapsed time = 5.635183616s
+1: elapsed time = 5.601661268s
+2: elapsed time = 5.635680643s
+3: elapsed time = 5.635491695s
+size = 8, nx = 1000, dim = 1000000, genie = Mumps
+multiplier =   1, errors = 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8
+multiplier =   2, errors = 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8
+multiplier =   5, errors = 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7
+multiplier =  10, errors = 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7
+multiplier = 100, errors = 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6
+0: elapsed time = 6.014376048s
+1: elapsed time = 6.000931957s
+2: elapsed time = 6.009101668s
+3: elapsed time = 6.009097956s
+4: elapsed time = 6.007243964s
+5: elapsed time = 5.981151693s
+6: elapsed time = 6.007454778s
+7: elapsed time = 6.007223542s
+size = 16, nx = 1000, dim = 1000000, genie = Mumps
+multiplier =   1, errors = 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8
+multiplier =   2, errors = 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8
+multiplier =   5, errors = 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7
+multiplier =  10, errors = 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7
+multiplier = 100, errors = 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6
+0: elapsed time = 10.428218256s
+1: elapsed time = 6.315301497s
+2: elapsed time = 6.358384498s
+3: elapsed time = 6.356725279s
+4: elapsed time = 6.363424797s
+5: elapsed time = 6.338785352s
+6: elapsed time = 6.362498094s
+7: elapsed time = 6.363013249s
+8: elapsed time = 10.427400805s
+9: elapsed time = 10.310254868s
+10: elapsed time = 10.426984014s
+11: elapsed time = 10.427634227s
+12: elapsed time = 10.427355494s
+13: elapsed time = 10.427340987s
+14: elapsed time = 10.42576152s
+15: elapsed time = 10.425205635s
+size = 24, nx = 1000, dim = 1000000, genie = Mumps
+multiplier =   1, errors = 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8
+multiplier =   2, errors = 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8
+multiplier =   5, errors = 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7
+multiplier =  10, errors = 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7
+multiplier = 100, errors = 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6
+0: elapsed time = 11.618588898s
+1: elapsed time = 6.710203107s
+2: elapsed time = 11.432581597s
+3: elapsed time = 11.431070777s
+4: elapsed time = 11.619380962s
+5: elapsed time = 11.615172211s
+6: elapsed time = 11.619133705s
+7: elapsed time = 11.617528557s
+8: elapsed time = 11.61576749s
+9: elapsed time = 11.429596844s
+10: elapsed time = 11.543718541s
+11: elapsed time = 11.543352708s
+12: elapsed time = 11.616184592s
+13: elapsed time = 11.440432773s
+14: elapsed time = 11.615777146s
+15: elapsed time = 11.615354918s
+16: elapsed time = 11.61748835s
+17: elapsed time = 11.61568802s
+18: elapsed time = 11.52301921s
+19: elapsed time = 11.521258799s
+20: elapsed time = 11.562682771s
+21: elapsed time = 6.757319111s
+22: elapsed time = 11.561282777s
+23: elapsed time = 6.735766608s

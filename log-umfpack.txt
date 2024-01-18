@@ -1,0 +1,91 @@
+size = 1, nx = 1000, dim = 1000000, genie = Umfpack
+multiplier =   1, errors = 3e-8
+multiplier =   2, errors = 7e-8
+multiplier =   5, errors = 2e-7
+multiplier =  10, errors = 3e-7
+multiplier = 100, errors = 3e-6
+0: elapsed time = 6.474512896s
+size = 2, nx = 1000, dim = 1000000, genie = Umfpack
+multiplier =   1, errors = 3e-8 3e-8
+multiplier =   2, errors = 7e-8 7e-8
+multiplier =   5, errors = 2e-7 2e-7
+multiplier =  10, errors = 3e-7 3e-7
+multiplier = 100, errors = 3e-6 3e-6
+0: elapsed time = 6.900824127s
+1: elapsed time = 6.900604106s
+size = 4, nx = 1000, dim = 1000000, genie = Umfpack
+multiplier =   1, errors = 3e-8 3e-8 3e-8 3e-8
+multiplier =   2, errors = 7e-8 7e-8 7e-8 7e-8
+multiplier =   5, errors = 2e-7 2e-7 2e-7 2e-7
+multiplier =  10, errors = 3e-7 3e-7 3e-7 3e-7
+multiplier = 100, errors = 3e-6 3e-6 3e-6 3e-6
+0: elapsed time = 8.152130192s
+1: elapsed time = 8.131805565s
+2: elapsed time = 8.127232826s
+3: elapsed time = 8.092750117s
+size = 8, nx = 1000, dim = 1000000, genie = Umfpack
+multiplier =   1, errors = 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8
+multiplier =   2, errors = 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8
+multiplier =   5, errors = 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7
+multiplier =  10, errors = 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7
+multiplier = 100, errors = 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6
+0: elapsed time = 11.103594675s
+1: elapsed time = 11.097484084s
+2: elapsed time = 10.824681731s
+3: elapsed time = 10.72528711s
+4: elapsed time = 10.862590889s
+5: elapsed time = 10.86280813s
+6: elapsed time = 10.856958445s
+7: elapsed time = 10.857191166s
+size = 16, nx = 1000, dim = 1000000, genie = Umfpack
+multiplier =   1, errors = 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8
+multiplier =   2, errors = 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8
+multiplier =   5, errors = 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7
+multiplier =  10, errors = 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7
+multiplier = 100, errors = 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6
+0: elapsed time = 22.381997239s
+1: elapsed time = 15.195501788s
+2: elapsed time = 15.208466815s
+3: elapsed time = 15.201597134s
+4: elapsed time = 15.22689743s
+5: elapsed time = 15.224694515s
+6: elapsed time = 15.196260447s
+7: elapsed time = 15.195822452s
+8: elapsed time = 22.381014282s
+9: elapsed time = 19.811429659s
+10: elapsed time = 22.336674229s
+11: elapsed time = 22.33673254s
+12: elapsed time = 22.381357221s
+13: elapsed time = 22.302301288s
+14: elapsed time = 22.380974238s
+15: elapsed time = 22.380612186s
+size = 24, nx = 1000, dim = 1000000, genie = Umfpack
+multiplier =   1, errors = 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8 3e-8
+multiplier =   2, errors = 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8 7e-8
+multiplier =   5, errors = 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7 2e-7
+multiplier =  10, errors = 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7 3e-7
+multiplier = 100, errors = 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6 3e-6
+0: elapsed time = 29.423033658s
+1: elapsed time = 19.35391956s
+2: elapsed time = 19.395116471s
+3: elapsed time = 19.394778726s
+4: elapsed time = 29.405249129s
+5: elapsed time = 29.403578645s
+6: elapsed time = 19.427683844s
+7: elapsed time = 19.427265947s
+8: elapsed time = 29.365388917s
+9: elapsed time = 29.245568567s
+10: elapsed time = 29.365400964s
+11: elapsed time = 29.241783617s
+12: elapsed time = 29.349369431s
+13: elapsed time = 29.24057177s
+14: elapsed time = 29.348921238s
+15: elapsed time = 29.348855652s
+16: elapsed time = 29.42140943s
+17: elapsed time = 29.335561245s
+18: elapsed time = 29.315517685s
+19: elapsed time = 29.315180303s
+20: elapsed time = 29.414610052s
+21: elapsed time = 29.364116627s
+22: elapsed time = 29.341194372s
+23: elapsed time = 19.354757582s
