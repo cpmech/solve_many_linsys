@@ -55,7 +55,7 @@ Or:
 
 where 2 is the number of MPI processes, 1000 is the grid division along one direction, and umfpack is the linear solver.
 
-This problem is [perfectly parallel](https://en.wikipedia.org/wiki/Embarrassingly_parallel) thus the total elapsed time should not depend on the number of (real) machine cores. However, the shared use of resources (e.g., memory) may cause some performance losses. Some results are shown below.
+This problem is [perfectly parallel](https://en.wikipedia.org/wiki/Embarrassingly_parallel) thus the total elapsed time should not depend on the number of (real) machine cores. However, the shared use of resources (e.g., memory) may cause some performance losses. Some results are shown below (size is the number of processes; the number of threads within each process is fixed to 1).
 
 **Mumps** (see [log-mumps.txt](https://github.com/cpmech/solve_many_linsys/blob/main/log-mumps.txt))
 
