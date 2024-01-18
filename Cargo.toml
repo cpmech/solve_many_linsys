@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-msgpass = "0.3"
+msgpass = "0.4"
 plotpy = "0.5"
 rayon = "1.8"
 russell_lab = "0.7"

@@ -1,5 +1,5 @@
-use msgpass::{mpi_finalize, mpi_init_thread, Communicator, MpiThread};
-use russell_lab::{Stopwatch, StrError, Vector};
+use msgpass::{bytes_to_string_lossy, mpi_finalize, mpi_init_thread, str_to_bytes, Communicator, MpiThread};
+use russell_lab::{format_nanoseconds, Stopwatch, StrError, Vector};
 use russell_sparse::{Genie, LinSolver, SparseMatrix};
 use solve_many_linsys::DiscreteLaplacian2d;
 use std::fmt;
@@ -59,6 +59,7 @@ struct Options {
 }
 
 const ROOT: usize = 0;
+const MSG_N_BYTES: usize = 32;
 
 fn main() -> Result<(), StrError> {
     // initialize the MPI engine
@@ -105,7 +106,7 @@ fn main() -> Result<(), StrError> {
         // compare the results
         let err_max = compare_analytical_solution(&fdm, &x, *multiplier);
 
-        // gather the results
+        // gather and print the errors
         if rank == ROOT {
             let mut all_err_max = vec![0.0; size];
             comm.gather_f64(ROOT, Some(&mut all_err_max), &[err_max])?;
@@ -115,10 +116,21 @@ fn main() -> Result<(), StrError> {
         }
     }
 
-    // message
+    // gather and print the elapsed times
+    let delta = format_nanoseconds(stopwatch.stop());
+    let mut bytes = vec![0_u8; MSG_N_BYTES];
+    str_to_bytes(&mut bytes, delta.as_str());
     if rank == ROOT {
-        stopwatch.stop();
-        println!("elapsed time = {}", stopwatch);
+        let mut all_bytes = vec![0_u8; MSG_N_BYTES * size];
+        comm.gather_bytes(ROOT, Some(&mut all_bytes), &bytes)?;
+        for i in 0..size {
+            let start = MSG_N_BYTES * i;
+            let end = MSG_N_BYTES * (i + 1);
+            let elapsed = bytes_to_string_lossy(&all_bytes[start..end]);
+            println!("{}: elapsed time = {}", i, elapsed);
+        }
+    } else {
+        comm.gather_bytes(ROOT, None, &bytes)?;
     }
 
     // finalize the MPI engine
@@ -126,9 +138,11 @@ fn main() -> Result<(), StrError> {
     Ok(())
 }
 
+/// Auxiliary struct to print errors
 struct P(Vec<f64>);
 
 impl fmt::Display for P {
+    /// Print formatted error values
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for v in &self.0 {
             write!(f, "{:5.0e}", v)?;
